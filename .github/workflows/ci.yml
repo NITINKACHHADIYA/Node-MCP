@@ -21,3 +21,17 @@ jobs:
       - run: npm run build          # examples typecheck against dist/
       - run: npm run typecheck
       - run: npm test
+
+  e2e:
+    # Packs the library, installs it into one fresh project per framework/version
+    # and drives each app with the official MCP SDK client.
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run test:e2e

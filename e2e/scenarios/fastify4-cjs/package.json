@@ -1,0 +1,6 @@
+{
+  "name": "e2e-fastify4-cjs",
+  "private": true,
+  "scripts": { "start": "node server.js" },
+  "dependencies": { "fastify": "^4.28.0" }
+}

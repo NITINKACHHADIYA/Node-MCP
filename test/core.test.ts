@@ -183,6 +183,10 @@ describe('express route discovery', () => {
     const fakeExpress4App = {
       post() {},
       all() {},
+      // Like Express 4: the legacy `app.router` getter throws.
+      get router(): never {
+        throw new Error("'app.router' is deprecated!");
+      },
       _router: {
         stack: [
           {

@@ -1,0 +1,1 @@
+{ "description": "Fastify 5, TypeScript ESM, @fastify/rate-limit per route, onRequest auth hook", "rateLimit": { "tool": "search_products", "max": 5 } }

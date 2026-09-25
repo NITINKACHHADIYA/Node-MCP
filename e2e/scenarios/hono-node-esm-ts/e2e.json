@@ -1,0 +1,1 @@
+{ "description": "Hono 4 on @hono/node-server, TypeScript ESM, hono/bearer-auth, sub-app via app.route(), zod" }

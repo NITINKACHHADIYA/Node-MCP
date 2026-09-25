@@ -61,7 +61,16 @@ export interface ExpressAppLike {
 }
 
 function stackOf(app: ExpressAppLike): ExpressLayer[] {
-  const router = (app.router ?? app._router) as { stack?: ExpressLayer[] } | undefined;
+  // Express 4 keeps the router on `_router`; its `app.router` getter throws.
+  // Express 5 exposes `app.router`.
+  let router = app._router as { stack?: ExpressLayer[] } | undefined;
+  if (!router) {
+    try {
+      router = app.router as typeof router;
+    } catch {
+      router = undefined;
+    }
+  }
   return router?.stack ?? [];
 }
 

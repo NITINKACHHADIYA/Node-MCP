@@ -1,0 +1,9 @@
+{
+  "name": "e2e-express4-cjs",
+  "private": true,
+  "scripts": { "start": "node server.js" },
+  "dependencies": {
+    "express": "^4.21.0",
+    "express-rate-limit": "^7.4.0"
+  }
+}
