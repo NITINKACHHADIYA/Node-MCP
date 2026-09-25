@@ -99,14 +99,15 @@ Tools are discovered **lazily on the first MCP request**, so the order you regis
 
 | Framework | Import | How you mark a route | Schema source | Dispatch |
 | --- | --- | --- | --- | --- |
-| NestJS 9+ (Express or Fastify platform) | `mcp-expose/nestjs` | `@McpTool()` decorator | class-validator DTOs (+ `@ApiProperty` descriptions) | loopback |
+| NestJS 10+ (Express or Fastify platform) | `mcp-expose/nestjs` | `@McpTool()` decorator | class-validator DTOs (+ `@ApiProperty` descriptions) | loopback |
 | Express 4 / 5 | `mcp-expose/express` | `mcpTool()` middleware | options (JSON Schema / zod) | loopback |
 | Fastify 4 / 5 | `mcp-expose/fastify` | `config: { mcp }` on the route | the route's own `schema` | `inject()` |
 | Koa 2 / 3 + @koa/router | `mcp-expose/koa` | `mcpTool()` middleware | options | loopback |
 | Hono 4 | `mcp-expose/hono` | `mcpTool()` middleware | options | `app.request()` |
 | Any HTTP API (any language) | `mcp-expose` | OpenAPI `x-mcp: true` | OpenAPI document | `fetch` |
 
-The test suite runs against NestJS 12 (both platforms), Express 5, Fastify 5, Koa 3 and Hono 4. Older majors in the table use the same APIs but are not yet covered by CI.
+End-to-end tested (see [`e2e/`](e2e/README.md)) by installing the packed library into fresh projects and driving them with the official MCP SDK client:
+NestJS 10 / 11 / 12 (Express and Fastify platforms, CommonJS and ESM), Express 4 / 5, Fastify 4 / 5, Koa 2 / 3, Hono 4 on Node, and an OpenAPI gateway.
 
 ## Installation
 
@@ -552,6 +553,7 @@ Contributions are welcome. See [Development](#development).
 ```bash
 npm install
 npm test            # vitest: core + all five adapters (real servers, real HTTP)
+npm run test:e2e    # pack → install into 11 fresh framework projects → official MCP SDK client
 npm run typecheck
 npm run build       # ESM + CJS + .d.ts into dist/
 
@@ -570,6 +572,7 @@ src/
   koa/         mcpTool() + koaMcp()
   hono/        mcpTool() + mountMcp()
 examples/      runnable apps for every framework + an OpenAPI gateway
+e2e/           developer-style end-to-end tests (one project per framework/version)
 test/          one shared behavioural contract, verified against every adapter
 ```
 
