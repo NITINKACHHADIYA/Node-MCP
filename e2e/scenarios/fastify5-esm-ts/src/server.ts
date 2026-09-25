@@ -20,7 +20,10 @@ app.get<{ Querystring: { q?: string } }>(
   '/products',
   {
     schema: { querystring: { type: 'object', properties: { q: { type: 'string' } } } },
-    config: { mcp: { name: 'search_products', description: 'Search products' }, rateLimit: { max: 5, timeWindow: 60_000 } },
+    config: {
+      mcp: { name: 'search_products', description: 'Search products' },
+      rateLimit: { max: 5, timeWindow: 60_000 },
+    },
   },
   async (req) => ({ items: products.filter((p) => p.name.toLowerCase().includes((req.query.q ?? '').toLowerCase())) }),
 );

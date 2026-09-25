@@ -2,6 +2,10 @@
   "name": "e2e-openapi-gateway-esm",
   "private": true,
   "type": "module",
-  "scripts": { "start": "node gateway.js" },
-  "dependencies": { "express": "^5.1.0" }
+  "scripts": {
+    "start": "node gateway.js"
+  },
+  "dependencies": {
+    "express": "^5.1.0"
+  }
 }

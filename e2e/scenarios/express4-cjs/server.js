@@ -7,7 +7,10 @@ const app = express();
 app.set('trust proxy', 'loopback');
 app.use(express.json());
 
-const products = [{ id: '1', name: 'Keyboard', sku: 'KB-01' }, { id: '2', name: 'Mouse', sku: 'MS-01' }];
+const products = [
+  { id: '1', name: 'Keyboard', sku: 'KB-01' },
+  { id: '2', name: 'Mouse', sku: 'MS-01' },
+];
 const orders = new Map([['1', { id: '1', sku: 'KB-01', quantity: 1, status: 'paid' }]]);
 
 const auth = (req, res, next) =>
@@ -16,20 +19,28 @@ const searchLimiter = rateLimit({ windowMs: 60_000, limit: 5, standardHeaders: t
 
 const api = express.Router();
 
-api.get('/products',
-  mcpTool({ name: 'search_products', description: 'Search products by name', query: { type: 'object', properties: { q: { type: 'string' } } } }),
+api.get(
+  '/products',
+  mcpTool({
+    name: 'search_products',
+    description: 'Search products by name',
+    query: { type: 'object', properties: { q: { type: 'string' } } },
+  }),
   searchLimiter,
   (req, res) => {
     const q = String(req.query.q || '').toLowerCase();
     res.json({ items: products.filter((p) => p.name.toLowerCase().includes(q)) });
-  });
+  },
+);
 
 api.get('/orders/:id', mcpTool({ name: 'get_order', description: 'Get an order' }), auth, (req, res) => {
   const order = orders.get(req.params.id);
-  order ? res.json(order) : res.status(404).json({ error: 'Not found' });
+  if (!order) return res.status(404).json({ error: 'Not found' });
+  res.json(order);
 });
 
-api.post('/orders',
+api.post(
+  '/orders',
   mcpTool({
     name: 'create_order',
     description: 'Create an order',
@@ -48,7 +59,8 @@ api.post('/orders',
     const order = { id: String(orders.size + 1), sku, quantity, status: 'pending' };
     orders.set(order.id, order);
     res.status(201).json(order);
-  });
+  },
+);
 
 api.delete('/orders/:id', mcpTool({ name: 'cancel_order', description: 'Cancel an order' }), auth, (req, res) => {
   res.json({ id: req.params.id, status: 'cancelled' });

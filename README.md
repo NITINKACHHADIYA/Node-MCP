@@ -1,5 +1,11 @@
 # mcp-expose
 
+[![CI](https://github.com/NITINKACHHADIYA/Node-MCP/actions/workflows/ci.yml/badge.svg)](https://github.com/NITINKACHHADIYA/Node-MCP/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/mcp-expose.svg)](https://www.npmjs.com/package/mcp-expose)
+[![types](https://img.shields.io/npm/types/mcp-expose.svg)](https://www.npmjs.com/package/mcp-expose)
+[![node](https://img.shields.io/node/v/mcp-expose.svg)](package.json)
+[![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 **Make your existing Node.js API agent-ready in minutes.**
 `mcp-expose` turns selected HTTP routes of your **NestJS, Express, Fastify, Koa or Hono** app into
 [Model Context Protocol (MCP)](https://modelcontextprotocol.io) tools, so AI agents such as Claude, Cursor,
@@ -49,14 +55,14 @@ app.get('/orders/:id', { schema, config: { mcp: { description: 'Get an order by 
 Many companies now want their APIs to be "agent-ready". The usual approach is a separate, hand-written MCP
 server that re-implements each endpoint as a tool:
 
-| Hand-written MCP wrapper | `mcp-expose` |
-| --- | --- |
-| Duplicates every endpoint's input schema, auth and error handling | Reuses the route that already exists. The route is the tool. |
+| Hand-written MCP wrapper                                               | `mcp-expose`                                                                      |
+| ---------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| Duplicates every endpoint's input schema, auth and error handling      | Reuses the route that already exists. The route is the tool.                      |
 | Needs its own auth. The easy path is often one over-privileged API key | Forwards the caller's `Authorization`/cookies, so **your guards decide** per user |
-| Validation logic drifts from the real API | Your `ValidationPipe`, Fastify schema, zod or Joi runs on every call |
-| Rate limits and audit logs are bypassed or re-implemented | Every tool call is a real request through your middleware |
-| A second service to deploy, version and monitor | Mounted at `/mcp` inside the app you already run |
-| Tied to one framework | Same concepts for NestJS, Express, Fastify, Koa and Hono |
+| Validation logic drifts from the real API                              | Your `ValidationPipe`, Fastify schema, zod or Joi runs on every call              |
+| Rate limits and audit logs are bypassed or re-implemented              | Every tool call is a real request through your middleware                         |
+| A second service to deploy, version and monitor                        | Mounted at `/mcp` inside the app you already run                                  |
+| Tied to one framework                                                  | Same concepts for NestJS, Express, Fastify, Koa and Hono                          |
 
 **Benefits for developers**
 
@@ -97,14 +103,14 @@ Tools are discovered **lazily on the first MCP request**, so the order you regis
 
 ## Supported frameworks
 
-| Framework | Import | How you mark a route | Schema source | Dispatch |
-| --- | --- | --- | --- | --- |
-| NestJS 10+ (Express or Fastify platform) | `mcp-expose/nestjs` | `@McpTool()` decorator | class-validator DTOs (+ `@ApiProperty` descriptions) | loopback |
-| Express 4 / 5 | `mcp-expose/express` | `mcpTool()` middleware | options (JSON Schema / zod) | loopback |
-| Fastify 4 / 5 | `mcp-expose/fastify` | `config: { mcp }` on the route | the route's own `schema` | `inject()` |
-| Koa 2 / 3 + @koa/router | `mcp-expose/koa` | `mcpTool()` middleware | options | loopback |
-| Hono 4 | `mcp-expose/hono` | `mcpTool()` middleware | options | `app.request()` |
-| Any HTTP API (any language) | `mcp-expose` | OpenAPI `x-mcp: true` | OpenAPI document | `fetch` |
+| Framework                                | Import               | How you mark a route           | Schema source                                        | Dispatch        |
+| ---------------------------------------- | -------------------- | ------------------------------ | ---------------------------------------------------- | --------------- |
+| NestJS 10+ (Express or Fastify platform) | `mcp-expose/nestjs`  | `@McpTool()` decorator         | class-validator DTOs (+ `@ApiProperty` descriptions) | loopback        |
+| Express 4 / 5                            | `mcp-expose/express` | `mcpTool()` middleware         | options (JSON Schema / zod)                          | loopback        |
+| Fastify 4 / 5                            | `mcp-expose/fastify` | `config: { mcp }` on the route | the route's own `schema`                             | `inject()`      |
+| Koa 2 / 3 + @koa/router                  | `mcp-expose/koa`     | `mcpTool()` middleware         | options                                              | loopback        |
+| Hono 4                                   | `mcp-expose/hono`    | `mcpTool()` middleware         | options                                              | `app.request()` |
+| Any HTTP API (any language)              | `mcp-expose`         | OpenAPI `x-mcp: true`          | OpenAPI document                                     | `fetch`         |
 
 End-to-end tested (see [`e2e/`](e2e/README.md)) by installing the packed library into fresh projects and driving them with the official MCP SDK client:
 NestJS 10 / 11 / 12 (Express and Fastify platforms, CommonJS and ESM), Express 4 / 5, Fastify 4 / 5, Koa 2 / 3, Hono 4 on Node, and an OpenAPI gateway.
@@ -138,7 +144,7 @@ import { McpModule } from 'mcp-expose/nestjs';
 @Module({
   imports: [
     McpModule.forRoot({
-      name: 'orders-api',           // shown to the AI client
+      name: 'orders-api', // shown to the AI client
       version: '1.0.0',
       instructions: 'Tools for looking up and placing orders.',
       // path: 'mcp',               // default endpoint: /mcp
@@ -197,9 +203,9 @@ The generated tool input for `create_order`:
 ```ts
 // main.ts
 const app = await NestFactory.create(AppModule);
-app.setGlobalPrefix('api', { exclude: ['mcp'] });  // optional: keep MCP at /mcp
+app.setGlobalPrefix('api', { exclude: ['mcp'] }); // optional: keep MCP at /mcp
 app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
-await app.listen(3000);   // MCP: http://localhost:3000/mcp
+await app.listen(3000); // MCP: http://localhost:3000/mcp
 ```
 
 Notes
@@ -219,25 +225,35 @@ import { mcpTool, mountMcp } from 'mcp-expose/express';
 
 const app = express();
 app.use(express.json());
-app.set('trust proxy', 'loopback');   // req.ip = real agent IP for tool calls (rate limiting)
+app.set('trust proxy', 'loopback'); // req.ip = real agent IP for tool calls (rate limiting)
 
 // Step 1: add mcpTool() as the FIRST handler of the routes to expose
-app.get('/products', mcpTool({
-  name: 'search_products',
-  description: 'Search the product catalog by name.',
-  query: { type: 'object', properties: { q: { type: 'string' } } },
-}), searchProducts);
+app.get(
+  '/products',
+  mcpTool({
+    name: 'search_products',
+    description: 'Search the product catalog by name.',
+    query: { type: 'object', properties: { q: { type: 'string' } } },
+  }),
+  searchProducts,
+);
 
-app.post('/orders', mcpTool({
-  name: 'create_order',
-  description: 'Place an order.',
-  body: z.object({ productId: z.string(), quantity: z.number().int().min(1) }),  // zod works too
-}), requireAuth, rateLimit, createOrder);
+app.post(
+  '/orders',
+  mcpTool({
+    name: 'create_order',
+    description: 'Place an order.',
+    body: z.object({ productId: z.string(), quantity: z.number().int().min(1) }), // zod works too
+  }),
+  requireAuth,
+  rateLimit,
+  createOrder,
+);
 
 // Step 2: mount the endpoint (before or after the routes)
 mountMcp(app, { name: 'shop-api', version: '1.0.0' });
 
-app.listen(3000);   // MCP: http://localhost:3000/mcp
+app.listen(3000); // MCP: http://localhost:3000/mcp
 ```
 
 **Routers mounted with a path:** Express 5 does not record mount paths, so pass them explicitly.
@@ -272,18 +288,22 @@ const app = Fastify();
 await app.register(fastifyMcp, { name: 'todo-api', version: '1.0.0' });
 
 // Step 2: add `config.mcp` to routes. Their JSON `schema` becomes the tool schema.
-app.post('/todos', {
-  schema: {
-    body: {
-      type: 'object',
-      properties: { title: { type: 'string', minLength: 1, description: 'What needs doing' } },
-      required: ['title'],
+app.post(
+  '/todos',
+  {
+    schema: {
+      body: {
+        type: 'object',
+        properties: { title: { type: 'string', minLength: 1, description: 'What needs doing' } },
+        required: ['title'],
+      },
     },
+    config: { mcp: { name: 'add_todo', description: 'Add a todo item.' } }, // or `mcp: true`
   },
-  config: { mcp: { name: 'add_todo', description: 'Add a todo item.' } },   // or `mcp: true`
-}, addTodo);
+  addTodo,
+);
 
-await app.listen({ port: 3000 });   // MCP: http://localhost:3000/mcp
+await app.listen({ port: 3000 }); // MCP: http://localhost:3000/mcp
 ```
 
 Protect the MCP endpoint itself with Fastify hooks: `register(fastifyMcp, { name, routeOptions: { onRequest: app.authenticate } })`.
@@ -306,7 +326,7 @@ router.get('/weather/:city', mcpTool({ description: 'Current weather for a city.
 app.use(koaMcp({ name: 'weather-api', routers: [router] }));
 app.use(router.routes());
 
-app.listen(3000);   // MCP: http://localhost:3000/mcp
+app.listen(3000); // MCP: http://localhost:3000/mcp
 ```
 
 Set `app.proxy = true` if your rate limiter keys on `ctx.ip`, so the forwarded agent IP is used.
@@ -322,14 +342,16 @@ import { mcpTool, mountMcp } from 'mcp-expose/hono';
 
 const app = new Hono();
 
-app.post('/notes',
+app.post(
+  '/notes',
   mcpTool({ name: 'create_note', description: 'Save a note.', body: z.object({ text: z.string() }) }),
   bearerAuth({ token }),
-  async (c) => c.json(await saveNote(await c.req.json()), 201));
+  async (c) => c.json(await saveNote(await c.req.json()), 201),
+);
 
 mountMcp(app, { name: 'notes-api' });
 
-export default app;   // MCP: https://<your-worker>/mcp
+export default app; // MCP: https://<your-worker>/mcp
 ```
 
 ### Any API via OpenAPI (standalone gateway)
@@ -344,7 +366,7 @@ import { mountMcp } from 'mcp-expose/express';
 
 const spec = await fetch('https://api.example.com/openapi.json').then((r) => r.json());
 const tools = toolsFromOpenApi(spec, createFetchDispatcher({ baseUrl: 'https://api.example.com' }), {
-  include: ({ method }) => method === 'get',   // e.g. only read-only operations
+  include: ({ method }) => method === 'get', // e.g. only read-only operations
 });
 
 const app = express();
@@ -396,7 +418,7 @@ claude mcp add --transport http shop-api http://localhost:3000/mcp \
 }
 ```
 
-**Claude Desktop.** For a deployed server, add it under *Settings → Connectors* using its public URL.
+**Claude Desktop.** For a deployed server, add it under _Settings → Connectors_ using its public URL.
 For a local server, bridge it with [`mcp-remote`](https://www.npmjs.com/package/mcp-remote) in `claude_desktop_config.json`:
 
 ```json
@@ -431,13 +453,13 @@ curl -s localhost:3000/mcp -H 'content-type: application/json' \
 
 The agent sees **one flat object** of arguments. mcp-expose maps each argument back to the right place:
 
-| Argument | Sent as |
-| --- | --- |
-| name matches a path placeholder (`:id`, `{id}`) | path segment (URL-encoded) |
-| declared in `query` | query string |
-| declared in `body` | JSON body property |
-| undeclared, route is `GET`/`DELETE` | query string |
-| undeclared, route is `POST`/`PUT`/`PATCH` | JSON body property |
+| Argument                                             | Sent as                                   |
+| ---------------------------------------------------- | ----------------------------------------- |
+| name matches a path placeholder (`:id`, `{id}`)      | path segment (URL-encoded)                |
+| declared in `query`                                  | query string                              |
+| declared in `body`                                   | JSON body property                        |
+| undeclared, route is `GET`/`DELETE`                  | query string                              |
+| undeclared, route is `POST`/`PUT`/`PATCH`            | JSON body property                        |
 | `body` is a non-object schema (for example an array) | the whole body, under the `body` argument |
 
 Every schema option accepts:
@@ -459,34 +481,34 @@ Your app's own validation always runs as well. The schema tells the agent what t
 
 ### Server options (all adapters)
 
-| Option | Type | Default | Description |
-| --- | --- | --- | --- |
-| `name` | `string` | required | Server name shown to clients. |
-| `version` | `string` | `'1.0.0'` | Server version. |
-| `instructions` | `string` | none | Guidance for the model on how to use the tools together. |
-| `path` | `string` | `'/mcp'` | Endpoint path. |
-| `allowedOrigins` | `string[] \| '*'` | `[]` | Browser origins allowed to call the endpoint. Requests without `Origin` (CLIs, IDEs, servers) are always allowed. |
-| `forwardHeaders` | `string[]` | `['authorization','cookie','x-api-key','accept-language']` | Headers copied from the MCP request to the internal API call. |
-| `maxResponseChars` | `number` | `100000` | Longer API responses are truncated before reaching the model. |
-| `tools` | `McpToolDefinition[]` | `[]` | Extra hand-written tools. |
-| `baseUrl` | `string` | loopback | *Express/Koa/Nest.* Where internal calls go. Set it for HTTPS with self-signed certs, unix sockets, or a separate API host. |
-| `routes` | `{method,path,...}[]` | `[]` | *Express/Koa/Hono.* Expose routes without editing them. |
-| `routers` | see guide | none | *Express:* `{ '/prefix': router }`. *Koa:* `[router]`. |
-| `middleware` | `Middleware[]` | `[]` | *Express.* Middleware in front of `/mcp`, such as auth. |
-| `guards` | `CanActivate[]` | `[]` | *NestJS.* Guards on the MCP controller. |
-| `pathPrefix` | `string` | none | *NestJS.* Extra prefix for tool routes. Global prefix and URI versioning are automatic. |
-| `routeOptions` | `object` | none | *Fastify.* Extra route options for `/mcp`, such as `onRequest` hooks. |
+| Option             | Type                  | Default                                                    | Description                                                                                                                 |
+| ------------------ | --------------------- | ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `name`             | `string`              | required                                                   | Server name shown to clients.                                                                                               |
+| `version`          | `string`              | `'1.0.0'`                                                  | Server version.                                                                                                             |
+| `instructions`     | `string`              | none                                                       | Guidance for the model on how to use the tools together.                                                                    |
+| `path`             | `string`              | `'/mcp'`                                                   | Endpoint path.                                                                                                              |
+| `allowedOrigins`   | `string[] \| '*'`     | `[]`                                                       | Browser origins allowed to call the endpoint. Requests without `Origin` (CLIs, IDEs, servers) are always allowed.           |
+| `forwardHeaders`   | `string[]`            | `['authorization','cookie','x-api-key','accept-language']` | Headers copied from the MCP request to the internal API call.                                                               |
+| `maxResponseChars` | `number`              | `100000`                                                   | Longer API responses are truncated before reaching the model.                                                               |
+| `tools`            | `McpToolDefinition[]` | `[]`                                                       | Extra hand-written tools.                                                                                                   |
+| `baseUrl`          | `string`              | loopback                                                   | _Express/Koa/Nest._ Where internal calls go. Set it for HTTPS with self-signed certs, unix sockets, or a separate API host. |
+| `routes`           | `{method,path,...}[]` | `[]`                                                       | _Express/Koa/Hono._ Expose routes without editing them.                                                                     |
+| `routers`          | see guide             | none                                                       | _Express:_ `{ '/prefix': router }`. _Koa:_ `[router]`.                                                                      |
+| `middleware`       | `Middleware[]`        | `[]`                                                       | _Express._ Middleware in front of `/mcp`, such as auth.                                                                     |
+| `guards`           | `CanActivate[]`       | `[]`                                                       | _NestJS._ Guards on the MCP controller.                                                                                     |
+| `pathPrefix`       | `string`              | none                                                       | _NestJS._ Extra prefix for tool routes. Global prefix and URI versioning are automatic.                                     |
+| `routeOptions`     | `object`              | none                                                       | _Fastify._ Extra route options for `/mcp`, such as `onRequest` hooks.                                                       |
 
 ### Tool options (`@McpTool()`, `mcpTool()`, `config.mcp`)
 
-| Option | Description |
-| --- | --- |
-| `name` | Tool name (`[A-Za-z0-9_-]`, max 64). Default is derived from the route, e.g. `get_users_by_id`. |
-| `description` | **The most important field.** Tells the model what the tool does and when to use it. |
-| `title` | Human-friendly display name. |
-| `input` / `params` / `query` / `body` | Schemas, see [above](#defining-tool-inputs-schemas). |
-| `annotations` | MCP hints: `readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`. Defaults come from the HTTP method (GET → read-only, DELETE → destructive). |
-| `headers` | Static headers added to the internal request. |
+| Option                                | Description                                                                                                                                                  |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `name`                                | Tool name (`[A-Za-z0-9_-]`, max 64). Default is derived from the route, e.g. `get_users_by_id`.                                                              |
+| `description`                         | **The most important field.** Tells the model what the tool does and when to use it.                                                                         |
+| `title`                               | Human-friendly display name.                                                                                                                                 |
+| `input` / `params` / `query` / `body` | Schemas, see [above](#defining-tool-inputs-schemas).                                                                                                         |
+| `annotations`                         | MCP hints: `readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`. Defaults come from the HTTP method (GET → read-only, DELETE → destructive). |
+| `headers`                             | Static headers added to the internal request.                                                                                                                |
 
 Each internal request also carries `X-Mcp-Tool: <tool name>`, so you can log or meter agent traffic separately.
 
@@ -500,7 +522,7 @@ import { z } from 'zod';
 
 const convert = defineTool({
   name: 'convert_currency',
-  description: 'Convert an amount between currencies using today\'s rate.',
+  description: "Convert an amount between currencies using today's rate.",
   input: z.object({ amount: z.number(), from: z.string().length(3), to: z.string().length(3) }),
   handler: async ({ amount, from, to }, ctx) => ({ result: await fx.convert(amount, from, to) }),
 });
@@ -523,7 +545,7 @@ Handlers can return a string, any JSON value, or a full MCP `ToolResult`. `ctx.h
 
 ## Writing tools agents use well
 
-- Describe **when** to use the tool, not only what it does: *"Search products by name. Use this before `create_order` to find a valid `productId`."*
+- Describe **when** to use the tool, not only what it does: _"Search products by name. Use this before `create_order` to find a valid `productId`."_
 - Document units, formats and limits in schema `description`s (`"price in cents"`, `"ISO 8601 date"`).
 - Prefer a few task-shaped tools (`search_orders`) over many CRUD primitives.
 - Return clear 4xx messages. They go straight to the model, which uses them to retry correctly.
@@ -579,6 +601,12 @@ test/          one shared behavioural contract, verified against every adapter
 Adding an adapter: find the marked routes, then call `createRouteTool(route, options, dispatcher)` and
 `server.handleHttp()`. Reuse `test/helpers.ts#assertAdapterContract` to test it.
 
+## Contributing
+
+Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) and the
+[Code of Conduct](CODE_OF_CONDUCT.md). Report security issues privately as described in [SECURITY.md](SECURITY.md).
+Release notes are in [CHANGELOG.md](CHANGELOG.md).
+
 ## License
 
-MIT © Nitin Kachhadiya
+[MIT](LICENSE) © Nitin Kachhadiya

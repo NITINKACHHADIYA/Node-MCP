@@ -154,11 +154,7 @@ function splitArgs(args: Record<string, unknown>, mapping: ArgMapping) {
     } else if (mapping.wholeBody && k === 'body') {
       body = v;
     } else if (mapping.query.has(k) || (!mapping.body.has(k) && !mapping.bodyMethod)) {
-      query[k] = Array.isArray(v)
-        ? v.map(String)
-        : typeof v === 'object' && v !== null
-          ? JSON.stringify(v)
-          : String(v);
+      query[k] = Array.isArray(v) ? v.map(String) : typeof v === 'object' && v !== null ? JSON.stringify(v) : String(v);
     } else {
       body = { ...((body as Record<string, unknown>) ?? {}), [k]: v };
     }
@@ -235,10 +231,7 @@ export function createRouteTool(
       if (ctx.clientIp) headers['x-forwarded-for'] = ctx.clientIp;
       if (body !== undefined) headers['content-type'] = 'application/json';
 
-      const res = await dispatch(
-        { method, path: interpolatePath(route.path, pathValues), query, body, headers },
-        ctx,
-      );
+      const res = await dispatch({ method, path: interpolatePath(route.path, pathValues), query, body, headers }, ctx);
       return responseToResult(res, maxChars);
     },
   };

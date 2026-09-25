@@ -9,19 +9,19 @@
 4. The app is started as a separate process (`npm start`, `PORT` env var).
 5. The official `@modelcontextprotocol/sdk` client connects and runs the checks in `contract.mjs`.
 
-| Scenario | What it covers |
-| --- | --- |
-| `express4-cjs` | Express 4, CommonJS, auto-detected router mount path, express-rate-limit |
-| `express5-esm-ts` | Express 5, strict TypeScript ESM, zod, `routers` option |
+| Scenario               | What it covers                                                              |
+| ---------------------- | --------------------------------------------------------------------------- |
+| `express4-cjs`         | Express 4, CommonJS, auto-detected router mount path, express-rate-limit    |
+| `express5-esm-ts`      | Express 5, strict TypeScript ESM, zod, `routers` option                     |
 | `nestjs10-express-cjs` | NestJS 10, classic `nest new` tsconfig (CommonJS + node10 resolution), DTOs |
-| `nestjs11-fastify-cjs` | NestJS 11 on Fastify, v11 tsconfig (nodenext), @nestjs/throttler |
-| `nestjs12-express-esm` | NestJS 12 (ESM-only), global prefix + URI versioning |
-| `fastify4-cjs` | Fastify 4, CommonJS, route JSON schemas, preHandler auth |
-| `fastify5-esm-ts` | Fastify 5, TypeScript ESM, @fastify/rate-limit, typed `app.mcpServer` |
-| `koa2-cjs` | Koa 2, @koa/router 12, koa-bodyparser |
-| `koa3-esm` | Koa 3, @koa/router 15, @koa/bodyparser, custom MCP path |
-| `hono-node-esm-ts` | Hono on @hono/node-server, bearer-auth, sub-app routing |
-| `openapi-gateway-esm` | Standalone gateway in front of a separate upstream API via OpenAPI |
+| `nestjs11-fastify-cjs` | NestJS 11 on Fastify, v11 tsconfig (nodenext), @nestjs/throttler            |
+| `nestjs12-express-esm` | NestJS 12 (ESM-only), global prefix + URI versioning                        |
+| `fastify4-cjs`         | Fastify 4, CommonJS, route JSON schemas, preHandler auth                    |
+| `fastify5-esm-ts`      | Fastify 5, TypeScript ESM, @fastify/rate-limit, typed `app.mcpServer`       |
+| `koa2-cjs`             | Koa 2, @koa/router 12, koa-bodyparser                                       |
+| `koa3-esm`             | Koa 3, @koa/router 15, @koa/bodyparser, custom MCP path                     |
+| `hono-node-esm-ts`     | Hono on @hono/node-server, bearer-auth, sub-app routing                     |
+| `openapi-gateway-esm`  | Standalone gateway in front of a separate upstream API via OpenAPI          |
 
 Run a subset with `npm run test:e2e -- nestjs koa`. Set `E2E_KEEP=1` to keep the generated projects.
 

@@ -31,7 +31,8 @@ export function createFetchDispatcher(opts: FetchDispatcherOptions): Dispatcher 
     const res = await doFetch(buildUrl(base, req), {
       method: req.method,
       headers: req.headers,
-      body: req.body === undefined || req.method === 'GET' || req.method === 'HEAD' ? undefined : JSON.stringify(req.body),
+      body:
+        req.body === undefined || req.method === 'GET' || req.method === 'HEAD' ? undefined : JSON.stringify(req.body),
       signal: AbortSignal.timeout(opts.timeoutMs ?? 30_000),
     });
     const headers: Record<string, string> = {};

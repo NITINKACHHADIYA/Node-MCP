@@ -1,1 +1,4 @@
-{ "description": "NestJS 11 + Fastify platform, `nest new` v11 tsconfig (nodenext, CJS), @nestjs/throttler on a tool", "rateLimit": { "tool": "search_products", "max": 5 } }
+{
+  "description": "NestJS 11 + Fastify platform, `nest new` v11 tsconfig (nodenext, CJS), @nestjs/throttler on a tool",
+  "rateLimit": { "tool": "search_products", "max": 5 }
+}

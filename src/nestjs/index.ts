@@ -115,8 +115,11 @@ export class McpService {
   }
 
   private versionSegment(controller: Function, handler: Function): string | undefined {
-    const versioning = (this.appConfig as { getVersioning?(): { type: number; prefix?: string | false; defaultVersion?: unknown } | undefined })
-      .getVersioning?.();
+    const versioning = (
+      this.appConfig as {
+        getVersioning?(): { type: number; prefix?: string | false; defaultVersion?: unknown } | undefined;
+      }
+    ).getVersioning?.();
     if (!versioning || versioning.type !== 0 /* VersioningType.URI */) return undefined;
     let version =
       Reflect.getMetadata(VERSION_METADATA, handler) ??
@@ -226,7 +229,10 @@ function toArray<T>(v: T | T[]): T[] {
 }
 
 function toSnake(s: string): string {
-  return s.replace(/([a-z0-9])([A-Z])/g, '$1_$2').replace(/[-\s]+/g, '_').toLowerCase();
+  return s
+    .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+    .replace(/[-\s]+/g, '_')
+    .toLowerCase();
 }
 
 // Decorators are applied by hand so this package builds without

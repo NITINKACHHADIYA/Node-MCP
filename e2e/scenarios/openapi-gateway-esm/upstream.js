@@ -10,23 +10,43 @@ export const openapi = {
   paths: {
     '/products': {
       get: {
-        operationId: 'search_products', summary: 'Search products', 'x-mcp': true,
+        operationId: 'search_products',
+        summary: 'Search products',
+        'x-mcp': true,
         parameters: [{ name: 'q', in: 'query', schema: { type: 'string' } }],
       },
     },
     '/orders': {
       post: {
-        operationId: 'create_order', summary: 'Create an order', 'x-mcp': true,
-        requestBody: { content: { 'application/json': { schema: {
-          type: 'object',
-          properties: { sku: { type: 'string' }, quantity: { type: 'integer', minimum: 1, maximum: 10 } },
-          required: ['sku', 'quantity'],
-        } } } },
+        operationId: 'create_order',
+        summary: 'Create an order',
+        'x-mcp': true,
+        requestBody: {
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: { sku: { type: 'string' }, quantity: { type: 'integer', minimum: 1, maximum: 10 } },
+                required: ['sku', 'quantity'],
+              },
+            },
+          },
+        },
       },
     },
     '/orders/{id}': {
-      get: { operationId: 'get_order', summary: 'Get an order', 'x-mcp': true, parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }] },
-      delete: { operationId: 'cancel_order', summary: 'Cancel an order', 'x-mcp': true, parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }] },
+      get: {
+        operationId: 'get_order',
+        summary: 'Get an order',
+        'x-mcp': true,
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+      },
+      delete: {
+        operationId: 'cancel_order',
+        summary: 'Cancel an order',
+        'x-mcp': true,
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+      },
     },
     '/whoami': { get: { operationId: 'whoami', summary: 'Debug', 'x-mcp': true } },
     '/admin/stats': { get: { operationId: 'admin_stats', summary: 'Not exposed' } },
@@ -54,7 +74,8 @@ export function startUpstream(port) {
     if (!authed) return send(401, { error: 'Unauthorized' });
     if (url.pathname === '/orders' && req.method === 'POST') {
       const { sku, quantity } = JSON.parse(body || '{}');
-      if (typeof sku !== 'string' || !Number.isInteger(quantity) || quantity < 1 || quantity > 10) return send(400, { error: 'invalid order' });
+      if (typeof sku !== 'string' || !Number.isInteger(quantity) || quantity < 1 || quantity > 10)
+        return send(400, { error: 'invalid order' });
       const order = { id: String(orders.size + 1), sku, quantity, status: 'pending' };
       orders.set(order.id, order);
       return send(201, order);

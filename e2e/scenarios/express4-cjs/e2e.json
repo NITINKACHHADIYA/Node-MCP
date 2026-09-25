@@ -1,1 +1,4 @@
-{ "description": "Express 4, CommonJS require(), router mounted at /api (auto-detected), express-rate-limit", "rateLimit": { "tool": "search_products", "max": 5 } }
+{
+  "description": "Express 4, CommonJS require(), router mounted at /api (auto-detected), express-rate-limit",
+  "rateLimit": { "tool": "search_products", "max": 5 }
+}

@@ -22,7 +22,9 @@ describe('fastify adapter', () => {
     app.get(
       '/users/:id',
       {
-        schema: { params: { type: 'object', properties: { id: { type: 'string', description: 'User id' } }, required: ['id'] } },
+        schema: {
+          params: { type: 'object', properties: { id: { type: 'string', description: 'User id' } }, required: ['id'] },
+        },
         config: { mcp: { name: 'get_user', description: 'Get a user' } },
       },
       async (req) => {

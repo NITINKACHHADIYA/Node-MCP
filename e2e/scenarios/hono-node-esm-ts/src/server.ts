@@ -10,24 +10,35 @@ const CreateOrder = z.object({ sku: z.string(), quantity: z.number().int().min(1
 const auth = bearerAuth({ token: 'e2e-token' });
 
 const api = new Hono();
-api.get('/products', mcpTool({ name: 'search_products', description: 'Search products', query: z.object({ q: z.string().optional() }) }), (c) => {
-  const q = (c.req.query('q') ?? '').toLowerCase();
-  return c.json({ items: products.filter((p) => p.name.toLowerCase().includes(q)) });
-});
+api.get(
+  '/products',
+  mcpTool({ name: 'search_products', description: 'Search products', query: z.object({ q: z.string().optional() }) }),
+  (c) => {
+    const q = (c.req.query('q') ?? '').toLowerCase();
+    return c.json({ items: products.filter((p) => p.name.toLowerCase().includes(q)) });
+  },
+);
 api.get('/orders/:id', mcpTool({ name: 'get_order', description: 'Get an order' }), auth, (c) =>
   c.json(orders.get(c.req.param('id')) ?? { error: 'not found' }),
 );
-api.post('/orders', mcpTool({ name: 'create_order', description: 'Create an order', body: CreateOrder }), auth, async (c) => {
-  const parsed = CreateOrder.safeParse(await c.req.json());
-  if (!parsed.success) return c.json({ error: parsed.error.issues }, 400);
-  const order = { id: String(orders.size + 1), ...parsed.data, status: 'pending' };
-  orders.set(order.id, order);
-  return c.json(order, 201);
-});
+api.post(
+  '/orders',
+  mcpTool({ name: 'create_order', description: 'Create an order', body: CreateOrder }),
+  auth,
+  async (c) => {
+    const parsed = CreateOrder.safeParse(await c.req.json());
+    if (!parsed.success) return c.json({ error: parsed.error.issues }, 400);
+    const order = { id: String(orders.size + 1), ...parsed.data, status: 'pending' };
+    orders.set(order.id, order);
+    return c.json(order, 201);
+  },
+);
 api.delete('/orders/:id', mcpTool({ name: 'cancel_order', description: 'Cancel an order' }), auth, (c) =>
   c.json({ id: c.req.param('id'), status: 'cancelled' }),
 );
-api.get('/whoami', mcpTool({ name: 'whoami', description: 'Debug' }), (c) => c.json({ tool: c.req.header('x-mcp-tool') ?? null }));
+api.get('/whoami', mcpTool({ name: 'whoami', description: 'Debug' }), (c) =>
+  c.json({ tool: c.req.header('x-mcp-tool') ?? null }),
+);
 api.get('/admin/stats', auth, (c) => c.json({ orders: orders.size })); // not exposed
 
 const app = new Hono();
