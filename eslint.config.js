@@ -21,6 +21,16 @@ export default tseslint.config(
     rules: { '@typescript-eslint/consistent-type-imports': 'off' },
   },
   {
+    // AdonisJS registers config types through empty interfaces (declaration merging).
+    files: ['e2e/scenarios/adonisjs*/config/**'],
+    rules: { '@typescript-eslint/no-empty-object-type': 'off' },
+  },
+  {
+    // Koa 1 route handlers are generators that do not always yield.
+    files: ['e2e/scenarios/koa1-*/**'],
+    rules: { 'require-yield': 'off' },
+  },
+  {
     // CommonJS e2e apps check the require() entry points on purpose.
     files: ['e2e/scenarios/*-cjs/**/*.js'],
     languageOptions: { sourceType: 'commonjs' },
