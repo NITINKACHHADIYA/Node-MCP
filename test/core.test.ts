@@ -1,17 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
+import { buildInputSchema, interpolatePath, toolNameFromRoute } from '../src/core/route-tool.js';
+import { discoverExpressRoutes } from '../src/express/discover.js';
+import { mcpTool } from '../src/express/index.js';
 import {
-  buildInputSchema,
   createRouteTool,
   defineTool,
-  interpolatePath,
   McpServer,
-  toolNameFromRoute,
   toolsFromOpenApi,
   type Dispatcher,
   type RouteRequest,
 } from '../src/index.js';
-import { discoverExpressRoutes, mcpTool } from '../src/express/index.js';
 
 const ctx = { headers: { authorization: 'Bearer t', cookie: 'sid=1', 'x-other': 'no' }, clientIp: '10.0.0.1' };
 
@@ -33,6 +32,21 @@ describe('route helpers', () => {
   it('interpolates and encodes path params, dropping missing optional ones', () => {
     expect(interpolatePath('/a/:id/{slug}', { id: 'x y', slug: 'z/1' })).toBe('/a/x%20y/z%2F1');
     expect(interpolatePath('/files/:name?', {})).toBe('/files');
+  });
+
+  it('rejects path parameter values that would escape the route', () => {
+    for (const bad of ['..', '.', '']) {
+      expect(() => interpolatePath('/orders/:id/items', { id: bad })).toThrow(/Invalid value for path parameter "id"/);
+    }
+    expect(interpolatePath('/orders/:id', { id: '../admin' })).toBe('/orders/..%2Fadmin');
+  });
+
+  it('turns a traversal attempt into a tool error without calling the API', async () => {
+    const { calls, dispatch } = recorder();
+    const tool = createRouteTool({ method: 'GET', path: '/orders/:id/items' }, {}, dispatch);
+    const res = await tool.handler({ id: '..' }, ctx);
+    expect(res.isError).toBe(true);
+    expect(calls).toHaveLength(0);
   });
 
   it('flattens params, query and body into one input schema', () => {

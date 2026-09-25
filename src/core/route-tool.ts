@@ -21,13 +21,29 @@ export function pathParams(path: string): string[] {
   return [...path.matchAll(PARAM_RE)].map((m) => (m[1] ?? m[2]) as string);
 }
 
+/**
+ * Encode one path-parameter value. Rejects empty, `.` and `..` values: after URL
+ * normalisation they would change which route is called (e.g. `/orders/../admin`),
+ * letting an agent reach routes that were never exposed as tools.
+ */
+function encodeSegment(name: string, value: unknown): string {
+  const raw = String(value);
+  if (raw === '' || raw === '.' || raw === '..') {
+    throw new Error(`Invalid value for path parameter "${name}": ${JSON.stringify(raw)}`);
+  }
+  return encodeURIComponent(raw);
+}
+
 /** Replace path placeholders with URL-encoded values. Missing optional params drop their segment. */
 export function interpolatePath(path: string, values: Record<string, unknown>): string {
   return path
     .replace(/\/:([A-Za-z0-9_]+)\?/g, (_, k: string) =>
-      values[k] === undefined ? '' : `/${encodeURIComponent(String(values[k]))}`,
+      values[k] === undefined ? '' : `/${encodeSegment(k, values[k])}`,
     )
-    .replace(PARAM_RE, (_, a?: string, b?: string) => encodeURIComponent(String(values[(a ?? b) as string])));
+    .replace(PARAM_RE, (_, a?: string, b?: string) => {
+      const k = (a ?? b) as string;
+      return encodeSegment(k, values[k]);
+    });
 }
 
 /** Join path segments, normalising slashes. */
@@ -231,7 +247,13 @@ export function createRouteTool(
       if (ctx.clientIp) headers['x-forwarded-for'] = ctx.clientIp;
       if (body !== undefined) headers['content-type'] = 'application/json';
 
-      const res = await dispatch({ method, path: interpolatePath(route.path, pathValues), query, body, headers }, ctx);
+      let path: string;
+      try {
+        path = interpolatePath(route.path, pathValues);
+      } catch (err) {
+        return { isError: true, content: [{ type: 'text', text: (err as Error).message }] };
+      }
+      const res = await dispatch({ method, path, query, body, headers }, ctx);
       return responseToResult(res, maxChars);
     },
   };

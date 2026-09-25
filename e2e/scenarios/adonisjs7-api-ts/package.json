@@ -1,0 +1,28 @@
+{
+  "name": "e2e-adonisjs7-api-ts",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "start": "node --import=@poppinss/ts-exec bin/server.ts"
+  },
+  "imports": {
+    "#controllers/*": "./app/controllers/*.js",
+    "#exceptions/*": "./app/exceptions/*.js",
+    "#middleware/*": "./app/middleware/*.js",
+    "#validators/*": "./app/validators/*.js",
+    "#start/*": "./start/*.js",
+    "#config/*": "./config/*.js"
+  },
+  "dependencies": {
+    "@adonisjs/core": "^7.5.0",
+    "@vinejs/vine": "^4.4.0",
+    "reflect-metadata": "^0.2.2"
+  },
+  "devDependencies": {
+    "@adonisjs/tsconfig": "^2.0.0",
+    "@poppinss/ts-exec": "^1.4.4",
+    "@types/node": "^24.0.0",
+    "typescript": "~6.0.3"
+  }
+}

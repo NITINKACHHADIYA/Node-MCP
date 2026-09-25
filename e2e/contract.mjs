@@ -109,9 +109,9 @@ export async function runContract(url, opts = {}) {
     assert(!r.isError && String(r.structuredContent?.id) === '1', 'expected order 1', r);
   });
 
-  await check("app's validation errors reach the agent (400)", async () => {
+  await check("app's validation errors reach the agent (400/422)", async () => {
     const r = await authed.callTool({ name: 'create_order', arguments: { sku: 'KB-01', quantity: 50 } });
-    assert(r.isError === true && text(r).includes('400'), 'expected 400 tool error', r);
+    assert(r.isError === true && /HTTP (400|422)/.test(text(r)), 'expected 400/422 tool error', r);
   });
 
   await check('POST body is built from arguments', async () => {

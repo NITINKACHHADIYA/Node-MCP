@@ -65,10 +65,20 @@ async function waitForServer(url, child, logs, timeoutMs = 60_000) {
 }
 
 async function main() {
-  const scenarios = readdirSync(scenariosDir)
+  const nodeMajor = Number(process.versions.node.split('.')[0]);
+  const configOf = (name) => {
+    const file = join(scenariosDir, name, 'e2e.json');
+    return existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : {};
+  };
+  const matched = readdirSync(scenariosDir)
     .filter((n) => !filters.length || filters.some((f) => n.includes(f)))
     .sort();
-  if (!scenarios.length) throw new Error('no scenarios matched');
+  if (!matched.length) throw new Error('no scenarios matched');
+  // Scenarios can require a newer Node.js (e.g. AdonisJS 7 needs Node 24).
+  const skipped = matched.filter((n) => (configOf(n).minNode ?? 0) > nodeMajor);
+  const scenarios = matched.filter((n) => !skipped.includes(n));
+  for (const n of skipped)
+    console.log(`▸ skipping ${n}: needs Node >= ${configOf(n).minNode} (running ${process.version})`);
 
   rmSync(work, { recursive: true, force: true });
   mkdirSync(work, { recursive: true });
@@ -102,8 +112,7 @@ async function main() {
   let port = 4100;
   for (const name of scenarios) {
     const dir = join(work, name);
-    const cfgPath = join(dir, 'e2e.json');
-    const cfg = existsSync(cfgPath) ? JSON.parse(readFileSync(cfgPath, 'utf8')) : {};
+    const cfg = configOf(name);
     console.log(`\n▸ ${name}${cfg.description ? ` — ${cfg.description}` : ''}`);
     if (setupErrors.has(name)) {
       console.log(`  ✗ setup: ${setupErrors.get(name)}`);
@@ -145,8 +154,9 @@ async function main() {
     if (passed !== results.length && logs.length) console.log(`  app log tail:\n${logs.join('').slice(-1500)}`);
   }
 
-  console.log('\n══ summary ══');
+  console.log(`\n══ summary (Node ${process.version}) ══`);
   for (const s of summary) console.log(`${s.failed ? '✗' : '✓'} ${s.name.padEnd(28)} ${s.passed}/${s.total}`);
+  for (const n of skipped) console.log(`- ${n.padEnd(28)} skipped (needs Node >= ${configOf(n).minNode})`);
   const failed = summary.filter((s) => s.failed).length;
   console.log(failed ? `\n${failed} scenario(s) failed` : `\nall ${summary.length} scenarios passed`);
   if (!process.env.E2E_KEEP) rmSync(work, { recursive: true, force: true });

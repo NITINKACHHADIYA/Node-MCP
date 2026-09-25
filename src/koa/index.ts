@@ -81,3 +81,43 @@ export function createKoaMcp(options: KoaMcpOptions): { server: McpServer; middl
 export function koaMcp(options: KoaMcpOptions): KoaMiddleware {
   return createKoaMcp(options).middleware;
 }
+
+/**
+ * Add the MCP endpoint to a Koa app and return the server:
+ *
+ *   mountMcp(app, { name: 'shop-api', routers: [router] })
+ *   app.use(router.routes())
+ *
+ * Call it before mounting your routers, like any Koa middleware.
+ */
+export function mountMcp(app: { use(middleware: KoaMiddleware): unknown }, options: KoaMcpOptions): McpServer {
+  const { server, middleware } = createKoaMcp(options);
+  app.use(middleware);
+  return server;
+}
+
+// ---------------------------------------------------------------------------
+// Koa 1 (generator middleware, koa-router 5)
+// ---------------------------------------------------------------------------
+
+type LegacyMiddleware = (this: KoaContext, next: unknown) => Generator<unknown, void, unknown>;
+
+/** Koa 1 variant of `mcpTool()` (a generator middleware for koa-router 5). */
+export function mcpToolLegacy(options: RouteToolOptions = {}): LegacyMiddleware {
+  return mark<LegacyMiddleware>(function* (next) {
+    yield next;
+  }, options);
+}
+
+/** Koa 1 variant of `koaMcp()`: `app.use(koaMcpLegacy({ name, routers: [router] }))`. */
+export function koaMcpLegacy(options: KoaMcpOptions): LegacyMiddleware {
+  const { middleware } = createKoaMcp(options);
+  return function* (next) {
+    let passThrough = false;
+    // Koa 1 runs on co, which can yield promises.
+    yield middleware(this, async () => {
+      passThrough = true;
+    });
+    if (passThrough) yield next;
+  };
+}

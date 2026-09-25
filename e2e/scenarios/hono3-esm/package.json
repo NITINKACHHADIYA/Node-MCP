@@ -1,0 +1,11 @@
+{
+  "name": "e2e-hono3-esm",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "hono": "^3.0.0"
+  }
+}

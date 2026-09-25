@@ -1,0 +1,12 @@
+{
+  "name": "e2e-koa1-cjs",
+  "private": true,
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "koa": "^1.7.1",
+    "koa-router": "^5.4.2",
+    "koa-bodyparser": "^2.5.0"
+  }
+}

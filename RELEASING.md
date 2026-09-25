@@ -63,6 +63,11 @@ The tag is chosen automatically (`scripts/release.mjs dist-tag`). **Publishing a
    - publishes to npm under `latest-3`, and creates a GitHub release that is not marked "latest"
 6. Release `main` and `v4.x` the same way if they received the fix too.
 
+## First release (1.0.0)
+
+`package.json` already contains `1.0.0`. Run _Actions → Release → Run workflow_ on `main` with bump **`none`**.
+This tags `v1.0.0` and publishes it under `latest`.
+
 ## Regular releases from `main`
 
 _Actions → Release → Run workflow_, branch **`main`**, bump `patch` / `minor` / `major`, or a `pre*`

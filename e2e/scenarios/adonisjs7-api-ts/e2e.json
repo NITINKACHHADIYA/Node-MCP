@@ -1,0 +1,4 @@
+{
+  "description": "AdonisJS 7 app (from the official API starter kit): controllers, named auth middleware, VineJS validator reused as tool schema, group prefix",
+  "minNode": 24
+}

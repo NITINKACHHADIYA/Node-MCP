@@ -18,7 +18,7 @@ Current status:
 
 | Version | Status |
 | ------- | ------ |
-| 0.x     | Active |
+| 1.x     | Active |
 
 ## Reporting a vulnerability
 

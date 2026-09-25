@@ -1,10 +1,13 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { createFetchDispatcher } from '../core/dispatch.js';
-import { mark, markerOf } from '../core/marker.js';
+import { mark } from '../core/marker.js';
 import { loopbackBaseUrl, normalizeHeaders, readRawBody, writeNodeResponse } from '../core/node.js';
-import { createRouteTool, joinPaths } from '../core/route-tool.js';
+import { createRouteTool } from '../core/route-tool.js';
 import { McpServer } from '../core/server.js';
 import type { McpServerOptions, McpToolDefinition, RouteToolOptions, ToolContext } from '../core/types.js';
+import { discoverExpressRoutes, type ExpressAppLike } from './discover.js';
+
+export type { ExpressAppLike } from './discover.js';
 
 type Req = IncomingMessage & { body?: unknown; ip?: string };
 type Next = (err?: unknown) => void;
@@ -44,95 +47,6 @@ export interface ExpressMcpOptions extends McpServerOptions {
    * protect tools/list as well as tools/call.
    */
   middleware?: Middleware[];
-}
-
-interface ExpressLayer {
-  route?: { path: string | string[]; methods: Record<string, boolean>; stack: { handle: unknown }[] };
-  name?: string;
-  handle?: { stack?: ExpressLayer[] };
-  regexp?: RegExp & { fast_slash?: boolean };
-}
-
-/** Structural type for an Express 4/5 app (or Router). Kept loose on purpose. */
-export interface ExpressAppLike {
-  all: Function;
-  router?: unknown;
-  _router?: unknown;
-}
-
-function stackOf(app: ExpressAppLike): ExpressLayer[] {
-  // Express 4 keeps the router on `_router`; its `app.router` getter throws.
-  // Express 5 exposes `app.router`.
-  let router = app._router as { stack?: ExpressLayer[] } | undefined;
-  if (!router) {
-    try {
-      router = app.router as typeof router;
-    } catch {
-      router = undefined;
-    }
-  }
-  return router?.stack ?? [];
-}
-
-/** Recover an Express 4 mount path from a layer regexp (best effort). */
-function express4Prefix(layer: ExpressLayer): string | undefined {
-  const re = layer.regexp;
-  if (!re) return undefined;
-  if (re.fast_slash) return '';
-  const m = /^\/\^((?:\\[.*+?^${}()|[\]\\/]|[^.*+?^${}()|[\]\\/])*)\\\/\?\(\?=\\\/\|\$\)\/i?$/.exec(re.toString());
-  return m ? (m[1] as string).replace(/\\(.)/g, '$1') : undefined;
-}
-
-interface Found {
-  method: string;
-  path: string;
-  options: RouteToolOptions;
-}
-
-function collect(
-  stack: ExpressLayer[],
-  prefix: string,
-  routers: Map<unknown, string>,
-  out: Found[],
-  unresolved: string[],
-) {
-  for (const layer of stack) {
-    if (layer.route) {
-      const marker = layer.route.stack.map((l) => markerOf(l.handle)).find(Boolean);
-      if (!marker) continue;
-      const paths = Array.isArray(layer.route.path) ? layer.route.path : [layer.route.path];
-      for (const method of Object.keys(layer.route.methods).filter((m) => m !== '_all')) {
-        for (const p of paths) out.push({ method: method.toUpperCase(), path: joinPaths(prefix, p), options: marker });
-      }
-    } else if (layer.handle?.stack) {
-      const known = routers.get(layer.handle);
-      const sub = known ?? express4Prefix(layer);
-      if (sub === undefined) {
-        // Only complain if this router actually contains MCP tools.
-        const inner: Found[] = [];
-        collect(layer.handle.stack, '', routers, inner, unresolved);
-        if (inner.length) unresolved.push(...inner.map((f) => `${f.method} ${f.path}`));
-        continue;
-      }
-      collect(layer.handle.stack, joinPaths(prefix, sub), routers, out, unresolved);
-    }
-  }
-}
-
-/** Find every route marked with `mcpTool()` in an Express app. */
-export function discoverExpressRoutes(app: ExpressAppLike, routers: Record<string, unknown> = {}): Found[] {
-  const stack = stackOf(app);
-  const byRouter = new Map(Object.entries(routers).map(([prefix, r]) => [r, prefix]));
-  const out: Found[] = [];
-  const unresolved: string[] = [];
-  collect(stack, '', byRouter, out, unresolved);
-  if (unresolved.length) {
-    throw new Error(
-      `mcp-expose: cannot determine the mount path of a router containing MCP tools (${unresolved.join(', ')}). ` +
-        `Pass it via the \`routers\` option, e.g. mountMcp(app, { routers: { '/api': apiRouter } }).`,
-    );
-  }
-  return out;
 }
 
 /**

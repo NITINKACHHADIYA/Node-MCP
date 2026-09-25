@@ -1,0 +1,10 @@
+{
+  "name": "e2e-fastify3-cjs",
+  "private": true,
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "fastify": "^3.29.5"
+  }
+}

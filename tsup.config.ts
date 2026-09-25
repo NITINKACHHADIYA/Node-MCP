@@ -8,6 +8,7 @@ export default defineConfig({
     'fastify/index': 'src/fastify/index.ts',
     'koa/index': 'src/koa/index.ts',
     'hono/index': 'src/hono/index.ts',
+    'adonisjs/index': 'src/adonisjs/index.ts',
   },
   format: ['esm', 'cjs'],
   dts: true,
@@ -15,5 +16,5 @@ export default defineConfig({
   sourcemap: true,
   target: 'node18',
   splitting: false,
-  external: [/^@nestjs\//, 'class-validator', 'fastify', 'express', 'koa', 'hono'],
+  external: [/^@nestjs\//, /^@adonisjs\//, 'class-validator', 'fastify', 'express', 'koa', 'hono'],
 });

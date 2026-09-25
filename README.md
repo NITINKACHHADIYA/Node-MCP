@@ -7,7 +7,7 @@
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 **Make your existing Node.js API agent-ready in minutes.**
-`mcp-expose` turns selected HTTP routes of your **NestJS, Express, Fastify, Koa or Hono** app into
+`mcp-expose` turns selected HTTP routes of your **NestJS, Express, Fastify, Koa, Hono or AdonisJS** app into
 [Model Context Protocol (MCP)](https://modelcontextprotocol.io) tools, so AI agents such as Claude, Cursor,
 VS Code Copilot and ChatGPT can call them. Your existing **auth guards, DTO validation, rate limits and
 logging keep working** because every tool call runs through your app's normal request pipeline.
@@ -23,10 +23,14 @@ app.get('/orders/:id', mcpTool({ description: 'Get an order by id' }), auth, get
 
 // Fastify
 app.get('/orders/:id', { schema, config: { mcp: { description: 'Get an order by id' } } }, getOrder);
+
+// AdonisJS
+router.get('/orders/:id', [OrdersController, 'show']).use(middleware.auth()).mcp({ description: 'Get an order by id' });
 ```
 
 - One decorator or marker per route, then add the module/plugin. No wrapper code to write.
-- Zero runtime dependencies. Dual ESM/CJS. Node ≥ 18, plus Bun, Deno and Workers for Hono.
+- Zero runtime dependencies. Dual ESM/CJS. Node.js 20, 22 and 24, plus Bun, Deno and Workers for Hono.
+- Supports the current **and the two previous major versions** of every framework, verified end to end.
 - Speaks MCP Streamable HTTP (protocol `2024-11-05` → `2025-11-25`), stateless, so it scales horizontally and runs serverless.
 
 ---
@@ -38,7 +42,7 @@ app.get('/orders/:id', { schema, config: { mcp: { description: 'Get an order by 
 3. [Supported frameworks](#supported-frameworks)
 4. [Installation](#installation)
 5. [Framework guides](#framework-guides)
-   - [NestJS](#nestjs) · [Express](#express) · [Fastify](#fastify) · [Koa](#koa) · [Hono](#hono) · [Any API via OpenAPI](#any-api-via-openapi-standalone-gateway)
+   - [NestJS](#nestjs) · [Express](#express) · [Fastify](#fastify) · [Koa](#koa) · [Hono](#hono) · [AdonisJS](#adonisjs) · [Any API via OpenAPI](#any-api-via-openapi-standalone-gateway)
 6. [Connect an AI client](#connect-an-ai-client)
 7. [Defining tool inputs (schemas)](#defining-tool-inputs-schemas)
 8. [Configuration reference](#configuration-reference)
@@ -98,23 +102,40 @@ Dispatch uses the fastest option each framework supports safely:
 
 - **Fastify** uses `fastify.inject()`, in process, with every hook, schema and plugin applied.
 - **Hono** uses `app.request()`, in process, and runs on any runtime.
-- **Express, Koa and NestJS** use a loopback HTTP request to the port the MCP call arrived on, so the full stack runs, including anything outside the framework such as a reverse proxy module.
+- **Express, Koa, NestJS and AdonisJS** use a loopback HTTP request to the port the MCP call arrived on, so the full stack runs, including anything outside the framework such as a reverse proxy module.
 
 Tools are discovered **lazily on the first MCP request**, so the order you register routes and the MCP endpoint rarely matters (Fastify is the exception, see its guide).
 
 ## Supported frameworks
 
-| Framework                                | Import               | How you mark a route           | Schema source                                        | Dispatch        |
-| ---------------------------------------- | -------------------- | ------------------------------ | ---------------------------------------------------- | --------------- |
-| NestJS 10+ (Express or Fastify platform) | `mcp-expose/nestjs`  | `@McpTool()` decorator         | class-validator DTOs (+ `@ApiProperty` descriptions) | loopback        |
-| Express 4 / 5                            | `mcp-expose/express` | `mcpTool()` middleware         | options (JSON Schema / zod)                          | loopback        |
-| Fastify 4 / 5                            | `mcp-expose/fastify` | `config: { mcp }` on the route | the route's own `schema`                             | `inject()`      |
-| Koa 2 / 3 + @koa/router                  | `mcp-expose/koa`     | `mcpTool()` middleware         | options                                              | loopback        |
-| Hono 4                                   | `mcp-expose/hono`    | `mcpTool()` middleware         | options                                              | `app.request()` |
-| Any HTTP API (any language)              | `mcp-expose`         | OpenAPI `x-mcp: true`          | OpenAPI document                                     | `fetch`         |
+| Framework                         | Import                | How you mark a route           | Schema source                                        | Dispatch        |
+| --------------------------------- | --------------------- | ------------------------------ | ---------------------------------------------------- | --------------- |
+| NestJS (Express or Fastify)       | `mcp-expose/nestjs`   | `@McpTool()` decorator         | class-validator DTOs (+ `@ApiProperty` descriptions) | loopback        |
+| Express                           | `mcp-expose/express`  | `mcpTool()` middleware         | options (JSON Schema / zod)                          | loopback        |
+| Fastify                           | `mcp-expose/fastify`  | `config: { mcp }` on the route | the route's own `schema`                             | `inject()`      |
+| Koa + @koa/router (or koa-router) | `mcp-expose/koa`      | `mcpTool()` middleware         | options                                              | loopback        |
+| Hono                              | `mcp-expose/hono`     | `mcpTool()` middleware         | options                                              | `app.request()` |
+| AdonisJS                          | `mcp-expose/adonisjs` | `.mcp()` on the route          | options, or a VineJS validator                       | loopback        |
+| Any HTTP API (any language)       | `mcp-expose`          | OpenAPI `x-mcp: true`          | OpenAPI document                                     | `fetch`         |
 
-End-to-end tested (see [`e2e/`](e2e/README.md)) by installing the packed library into fresh projects and driving them with the official MCP SDK client:
-NestJS 10 / 11 / 12 (Express and Fastify platforms, CommonJS and ESM), Express 4 / 5, Fastify 4 / 5, Koa 2 / 3, Hono 4 on Node, and an OpenAPI gateway.
+### Version compatibility
+
+mcp-expose supports the **current major version of each framework and the two before it**. Every row
+below runs in CI as a real project (see [`e2e/`](e2e/README.md)): the packed library is installed from its
+tarball and the app is driven by the official MCP SDK client, on Node.js 20, 22 and 24.
+
+| Framework | Supported majors | Notes                                                                                |
+| --------- | ---------------- | ------------------------------------------------------------------------------------ |
+| NestJS    | **12**, 11, 10   | Express and Fastify platforms; CommonJS and ESM projects; classic and v11 `tsconfig` |
+| Express   | **5**, 4, 3      | Express 3 has been unmaintained since 2015 (upgrade recommended)                     |
+| Fastify   | **5**, 4, 3      | Fastify 3 is end-of-life upstream                                                    |
+| Koa       | **3**, 2, 1      | Koa 1 (generator middleware) uses `mcpToolLegacy()` / `koaMcpLegacy()`               |
+| Hono      | **4**, 3, 2      | Hono 2 and 3 are end-of-life upstream                                                |
+| AdonisJS  | **7**, 6         | AdonisJS 7 needs Node.js 24. AdonisJS 5 is not supported (see below)                 |
+
+**AdonisJS 5** (last release November 2022) is the only exception. It uses a different architecture:
+IoC-container imports such as `@ioc:Adonis/Core/Route`, and CommonJS builds. Supporting it would need a
+separate adapter. Please [open an issue](https://github.com/NITINKACHHADIYA/Node-MCP/issues) if you need it.
 
 ## Installation
 
@@ -197,6 +218,18 @@ The generated tool input for `create_order`:
   },
   "required": ["sku", "quantity"]
 }
+```
+
+**Loading options from configuration:** use `forRootAsync`. `path` and `guards` are passed directly,
+because they define the MCP controller:
+
+```ts
+McpModule.forRootAsync({
+  imports: [ConfigModule],
+  inject: [ConfigService],
+  useFactory: (config: ConfigService) => ({ name: config.get('APP_NAME'), version: config.get('APP_VERSION') }),
+  guards: [JwtAuthGuard],
+});
 ```
 
 **Step 3: bootstrap as usual:**
@@ -315,7 +348,7 @@ The server is available as `app.mcpServer`.
 ```ts
 import Koa from 'koa';
 import Router from '@koa/router';
-import { koaMcp, mcpTool } from 'mcp-expose/koa';
+import { mcpTool, mountMcp } from 'mcp-expose/koa';
 
 const app = new Koa();
 const router = new Router({ prefix: '/api' });
@@ -323,14 +356,25 @@ const router = new Router({ prefix: '/api' });
 // Step 1: mark routes
 router.get('/weather/:city', mcpTool({ description: 'Current weather for a city.' }), getWeather);
 
-// Step 2: mount the endpoint and list the routers to scan
-app.use(koaMcp({ name: 'weather-api', routers: [router] }));
+// Step 2: mount the endpoint (before your routers) and list the routers to scan
+mountMcp(app, { name: 'weather-api', routers: [router] });
 app.use(router.routes());
 
 app.listen(3000); // MCP: http://localhost:3000/mcp
 ```
 
+`koaMcp(options)` returns the same endpoint as a plain middleware, for use with `koa-mount` or `koa-compose`.
 Set `app.proxy = true` if your rate limiter keys on `ctx.ip`, so the forwarded agent IP is used.
+
+**Koa 1** (generator middleware, koa-router 5): use the legacy helpers.
+
+```js
+const { koaMcpLegacy, mcpToolLegacy } = require('mcp-expose/koa');
+
+router.get('/weather/:city', mcpToolLegacy({ description: 'Current weather for a city.' }), getWeather);
+app.use(koaMcpLegacy({ name: 'weather-api', routers: [router] }));
+app.use(router.routes());
+```
 
 ### Hono
 
@@ -354,6 +398,46 @@ mountMcp(app, { name: 'notes-api' });
 
 export default app; // MCP: https://<your-worker>/mcp
 ```
+
+### AdonisJS
+
+Works with AdonisJS 6 and 7. Import `mcp-expose/adonisjs` in `start/routes.ts`. That adds a `.mcp()` method to
+routes, next to `.as()` and `.use()`:
+
+```ts
+// start/routes.ts
+import router from '@adonisjs/core/services/router';
+import { mountMcp } from 'mcp-expose/adonisjs';
+import { middleware } from '#start/kernel';
+import { createOrderValidator } from '#validators/order';
+
+const OrdersController = () => import('#controllers/orders_controller');
+
+router
+  .group(() => {
+    // Step 1: mark routes. Group prefixes and middleware (auth, throttle) all apply.
+    router.get('orders/:id', [OrdersController, 'show']).mcp({ description: 'Get an order by id' });
+
+    // A VineJS 4 validator (AdonisJS 7) can be passed as the schema directly
+    router
+      .post('orders', [OrdersController, 'store'])
+      .mcp({ name: 'create_order', description: 'Place an order', body: createOrderValidator });
+  })
+  .prefix('/api/v1')
+  .use(middleware.auth());
+
+// Step 2: mount the endpoint
+mountMcp(router, { name: 'shop-api' });
+// MCP: http://localhost:3333/mcp
+```
+
+Notes
+
+- Validation errors from `request.validateUsing()` (HTTP 422) are returned to the agent so it can correct itself.
+- VineJS 3 (AdonisJS 6) cannot export JSON Schema, so pass `body` as a JSON Schema object there.
+- Protect the MCP endpoint itself with `configureRoute`: `mountMcp(router, { name, configureRoute: (route) => route.use(middleware.auth()) })`.
+- Resource routes: mark individual actions with `router.resource('posts', PostsController).tap('show', (route) => route.mcp({ ... }))`.
+- If you use the web starter kit, exclude the MCP path from CSRF protection (`config/shield.ts`, `csrf.exceptRoutes`).
 
 ### Any API via OpenAPI (standalone gateway)
 
@@ -482,34 +566,35 @@ Your app's own validation always runs as well. The schema tells the agent what t
 
 ### Server options (all adapters)
 
-| Option             | Type                  | Default                                                    | Description                                                                                                                 |
-| ------------------ | --------------------- | ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `name`             | `string`              | required                                                   | Server name shown to clients.                                                                                               |
-| `version`          | `string`              | `'1.0.0'`                                                  | Server version.                                                                                                             |
-| `instructions`     | `string`              | none                                                       | Guidance for the model on how to use the tools together.                                                                    |
-| `path`             | `string`              | `'/mcp'`                                                   | Endpoint path.                                                                                                              |
-| `allowedOrigins`   | `string[] \| '*'`     | `[]`                                                       | Browser origins allowed to call the endpoint. Requests without `Origin` (CLIs, IDEs, servers) are always allowed.           |
-| `forwardHeaders`   | `string[]`            | `['authorization','cookie','x-api-key','accept-language']` | Headers copied from the MCP request to the internal API call.                                                               |
-| `maxResponseChars` | `number`              | `100000`                                                   | Longer API responses are truncated before reaching the model.                                                               |
-| `tools`            | `McpToolDefinition[]` | `[]`                                                       | Extra hand-written tools.                                                                                                   |
-| `baseUrl`          | `string`              | loopback                                                   | _Express/Koa/Nest._ Where internal calls go. Set it for HTTPS with self-signed certs, unix sockets, or a separate API host. |
-| `routes`           | `{method,path,...}[]` | `[]`                                                       | _Express/Koa/Hono._ Expose routes without editing them.                                                                     |
-| `routers`          | see guide             | none                                                       | _Express:_ `{ '/prefix': router }`. _Koa:_ `[router]`.                                                                      |
-| `middleware`       | `Middleware[]`        | `[]`                                                       | _Express._ Middleware in front of `/mcp`, such as auth.                                                                     |
-| `guards`           | `CanActivate[]`       | `[]`                                                       | _NestJS._ Guards on the MCP controller.                                                                                     |
-| `pathPrefix`       | `string`              | none                                                       | _NestJS._ Extra prefix for tool routes. Global prefix and URI versioning are automatic.                                     |
-| `routeOptions`     | `object`              | none                                                       | _Fastify._ Extra route options for `/mcp`, such as `onRequest` hooks.                                                       |
+| Option             | Type                  | Default                                                    | Description                                                                                                                        |
+| ------------------ | --------------------- | ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `name`             | `string`              | required                                                   | Server name shown to clients.                                                                                                      |
+| `version`          | `string`              | `'1.0.0'`                                                  | Server version.                                                                                                                    |
+| `instructions`     | `string`              | none                                                       | Guidance for the model on how to use the tools together.                                                                           |
+| `path`             | `string`              | `'/mcp'`                                                   | Endpoint path.                                                                                                                     |
+| `allowedOrigins`   | `string[] \| '*'`     | `[]`                                                       | Browser origins allowed to call the endpoint. Requests without `Origin` (CLIs, IDEs, servers) are always allowed.                  |
+| `forwardHeaders`   | `string[]`            | `['authorization','cookie','x-api-key','accept-language']` | Headers copied from the MCP request to the internal API call.                                                                      |
+| `maxResponseChars` | `number`              | `100000`                                                   | Longer API responses are truncated before reaching the model.                                                                      |
+| `tools`            | `McpToolDefinition[]` | `[]`                                                       | Extra hand-written tools.                                                                                                          |
+| `baseUrl`          | `string`              | loopback                                                   | _Express/Koa/Nest/Adonis._ Where internal calls go. Set it for HTTPS with self-signed certs, unix sockets, or a separate API host. |
+| `routes`           | `{method,path,...}[]` | `[]`                                                       | _Express/Koa/Hono._ Expose routes without editing them.                                                                            |
+| `routers`          | see guide             | none                                                       | _Express:_ `{ '/prefix': router }`. _Koa:_ `[router]`.                                                                             |
+| `middleware`       | `Middleware[]`        | `[]`                                                       | _Express._ Middleware in front of `/mcp`, such as auth.                                                                            |
+| `guards`           | `CanActivate[]`       | `[]`                                                       | _NestJS._ Guards on the MCP controller.                                                                                            |
+| `pathPrefix`       | `string`              | none                                                       | _NestJS._ Extra prefix for tool routes. Global prefix and URI versioning are automatic.                                            |
+| `routeOptions`     | `object`              | none                                                       | _Fastify._ Extra route options for `/mcp`, such as `onRequest` hooks.                                                              |
+| `configureRoute`   | `(route) => void`     | none                                                       | _AdonisJS._ Configure the MCP route, e.g. add middleware.                                                                          |
 
-### Tool options (`@McpTool()`, `mcpTool()`, `config.mcp`)
+### Tool options (`@McpTool()`, `mcpTool()`, `config.mcp`, `.mcp()`)
 
-| Option                                | Description                                                                                                                                                  |
-| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `name`                                | Tool name (`[A-Za-z0-9_-]`, max 64). Default is derived from the route, e.g. `get_users_by_id`.                                                              |
-| `description`                         | **The most important field.** Tells the model what the tool does and when to use it.                                                                         |
-| `title`                               | Human-friendly display name.                                                                                                                                 |
-| `input` / `params` / `query` / `body` | Schemas, see [above](#defining-tool-inputs-schemas).                                                                                                         |
-| `annotations`                         | MCP hints: `readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`. Defaults come from the HTTP method (GET → read-only, DELETE → destructive). |
-| `headers`                             | Static headers added to the internal request.                                                                                                                |
+| Option                                | Description                                                                                                                                                         |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`                                | Tool name (`[A-Za-z0-9_-]`, max 64). Default is derived from the route, e.g. `get_users_by_id`. Agents call tools by name, so set it explicitly and keep it stable. |
+| `description`                         | **The most important field.** Tells the model what the tool does and when to use it.                                                                                |
+| `title`                               | Human-friendly display name.                                                                                                                                        |
+| `input` / `params` / `query` / `body` | Schemas, see [above](#defining-tool-inputs-schemas).                                                                                                                |
+| `annotations`                         | MCP hints: `readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`. Defaults come from the HTTP method (GET → read-only, DELETE → destructive).        |
+| `headers`                             | Static headers added to the internal request.                                                                                                                       |
 
 Each internal request also carries `X-Mcp-Tool: <tool name>`, so you can log or meter agent traffic separately.
 
@@ -554,17 +639,19 @@ Handlers can return a string, any JSON value, or a full MCP `ToolResult`. `ctx.h
 
 ## Limitations and roadmap
 
-Current scope (v0.1):
+Current scope (1.x):
 
 - Stateless Streamable HTTP with JSON responses. No server-initiated SSE stream or sessions. The spec allows this, and it keeps the server horizontally scalable.
 - Tools only. `resources/list` and `prompts/list` return empty lists.
 - NestJS: URI versioning is detected. Header and media-type versioning need `headers` on the tool.
 - Express 5 routers mounted with a path must be listed in `routers`.
+- Path parameters cannot be empty, `.` or `..`. These are rejected so an agent cannot reach routes that were not exposed.
 
-Planned:
+Planned (non-breaking, 1.x minor releases):
 
-- OAuth 2.1 protected-resource metadata (RFC 9728) helpers for remote MCP auth
-- Adapters for Hapi, AdonisJS and Elysia
+- OAuth 2.1 protected-resource metadata (RFC 9728) helpers for remote MCP auth, and per-user tool lists
+- Next.js route handlers, Hapi and Elysia adapters
+- Structured output schemas, and binary/file responses
 - Streaming long-running responses over SSE
 - CLI to preview generated tools (`npx mcp-expose inspect`)
 - Resources from GET routes, and prompts
@@ -575,8 +662,8 @@ Contributions are welcome. See [Development](#development).
 
 ```bash
 npm install
-npm test            # vitest: core + all five adapters (real servers, real HTTP)
-npm run test:e2e    # pack → install into 11 fresh framework projects → official MCP SDK client
+npm test            # vitest: core + all six adapters (real servers, real HTTP)
+npm run test:e2e    # pack → install into 18 fresh framework projects → official MCP SDK client
 npm run typecheck
 npm run build       # ESM + CJS + .d.ts into dist/
 
@@ -592,8 +679,9 @@ src/
   express/     mcpTool() + mountMcp()
   nestjs/      @McpTool() + McpModule + DTO → JSON Schema
   fastify/     fastifyMcp plugin (config.mcp)
-  koa/         mcpTool() + koaMcp()
+  koa/         mcpTool() + mountMcp() / koaMcp() (+ Koa 1 legacy helpers)
   hono/        mcpTool() + mountMcp()
+  adonisjs/    .mcp() route macro + mountMcp()
 examples/      runnable apps for every framework + an OpenAPI gateway
 e2e/           developer-style end-to-end tests (one project per framework/version)
 test/          one shared behavioural contract, verified against every adapter

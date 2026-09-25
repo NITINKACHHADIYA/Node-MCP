@@ -160,4 +160,32 @@ describe('nestjs adapter', () => {
     expect(body.result.serverInfo).toEqual({ name: 'nest-test', version: '1.2.3' });
     expect(body.result.protocolVersion).toBe('2025-11-25');
   });
+
+  it('supports forRootAsync with injected configuration', async () => {
+    const CONFIG = 'CONFIG';
+    @Module({ providers: [{ provide: CONFIG, useValue: { appName: 'from-config' } }], exports: [CONFIG] })
+    class ConfigModule {}
+
+    @Module({
+      imports: [
+        McpModule.forRootAsync({
+          imports: [ConfigModule],
+          inject: [CONFIG],
+          useFactory: (config: { appName: string }) => ({ name: config.appName, version: '2.0.0' }),
+          path: 'agents/mcp',
+        }),
+      ],
+      controllers: [UsersController],
+    })
+    class AsyncAppModule {}
+
+    app = await NestFactory.create(AsyncAppModule, { logger: false });
+    app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
+    await app.listen(0, '127.0.0.1');
+    const base = (await app.getUrl()).replace('[::1]', '127.0.0.1').replace('localhost', '127.0.0.1');
+    const { body } = await rpc(`${base}/agents/mcp`, 'initialize', { protocolVersion: '2025-06-18' });
+    expect(body.result.serverInfo).toEqual({ name: 'from-config', version: '2.0.0' });
+    const res = await callTool(`${base}/agents/mcp`, 'get_user', { id: '3' }, { authorization: TOKEN });
+    expect(res.structuredContent).toEqual({ id: '3', name: 'User 3' });
+  });
 });

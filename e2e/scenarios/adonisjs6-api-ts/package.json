@@ -1,0 +1,29 @@
+{
+  "name": "e2e-adonisjs6-api-ts",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "start": "node --import=ts-node-maintained/register/esm bin/server.ts"
+  },
+  "imports": {
+    "#controllers/*": "./app/controllers/*.js",
+    "#exceptions/*": "./app/exceptions/*.js",
+    "#middleware/*": "./app/middleware/*.js",
+    "#validators/*": "./app/validators/*.js",
+    "#start/*": "./start/*.js",
+    "#config/*": "./config/*.js"
+  },
+  "dependencies": {
+    "@adonisjs/core": "^6.18.0",
+    "@vinejs/vine": "^3.0.1",
+    "reflect-metadata": "^0.2.2"
+  },
+  "devDependencies": {
+    "@adonisjs/tsconfig": "^1.4.0",
+    "@swc/core": "1.11.24",
+    "@types/node": "^22.15.18",
+    "ts-node-maintained": "^10.9.5",
+    "typescript": "~5.8"
+  }
+}

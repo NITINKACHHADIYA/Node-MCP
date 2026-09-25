@@ -18,7 +18,8 @@ on:
       bump:
         description: Version bump
         type: choice
-        options: [patch, minor, major, prepatch, preminor, premajor, prerelease]
+        # `none` publishes the version already in package.json (e.g. the first 1.0.0 release).
+        options: [patch, minor, major, prepatch, preminor, premajor, prerelease, none]
         default: patch
       preid:
         description: Prerelease identifier (only for pre* bumps)
@@ -61,7 +62,17 @@ jobs:
           PREID: ${{ inputs.preid }}
           BRANCH: ${{ github.ref_name }}
         run: |
-          if [[ "$BUMP" == pre* ]]; then npm version "$BUMP" --preid "$PREID"; else npm version "$BUMP"; fi
+          if [ "$BUMP" = "none" ]; then
+            VERSION=$(node -p "require('./package.json').version")
+            if git rev-parse -q --verify "refs/tags/v$VERSION" >/dev/null; then
+              echo "::error::v$VERSION is already tagged. Choose a version bump instead."; exit 1
+            fi
+            git tag -a "v$VERSION" -m "Release v$VERSION"
+          elif [[ "$BUMP" == pre* ]]; then
+            npm version "$BUMP" --preid "$PREID"
+          else
+            npm version "$BUMP"
+          fi
           VERSION=$(node -p "require('./package.json').version")
           node scripts/release.mjs check-branch "$BRANCH" "$VERSION"
           echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"

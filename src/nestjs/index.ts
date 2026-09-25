@@ -83,6 +83,17 @@ export interface McpModuleOptions extends McpServerOptions {
   classValidatorStorage?: ClassValidatorStorage;
 }
 
+export interface McpModuleAsyncOptions extends Pick<McpModuleOptions, 'path' | 'guards'> {
+  /** Modules that export the providers listed in `inject`. */
+  imports?: NonNullable<DynamicModule['imports']>;
+  /** Providers passed to `useFactory`. */
+  inject?: (string | symbol | Function)[];
+  /** Returns the remaining options (everything except `path` and `guards`). */
+  useFactory: (
+    ...args: any[]
+  ) => Omit<McpModuleOptions, 'path' | 'guards'> | Promise<Omit<McpModuleOptions, 'path' | 'guards'>>;
+}
+
 interface ControllerWrapper {
   metatype?: Function | null;
   instance?: object;
@@ -261,7 +272,7 @@ interface AnyRes {
   end?(body?: unknown): unknown;
 }
 
-function createMcpController(options: McpModuleOptions): Type<unknown> {
+function createMcpController(options: Pick<McpModuleOptions, 'path' | 'guards'>): Type<unknown> {
   class McpController {
     constructor(readonly mcp: McpService) {}
 
@@ -307,6 +318,38 @@ export class McpModule {
       imports: [DiscoveryModule],
       controllers: [createMcpController(options)],
       providers: [{ provide: MCP_MODULE_OPTIONS, useValue: options }, McpService],
+      exports: [McpService],
+    };
+  }
+
+  /**
+   * Resolve the options from other providers, e.g. `ConfigService`:
+   *
+   *   McpModule.forRootAsync({
+   *     imports: [ConfigModule],
+   *     inject: [ConfigService],
+   *     useFactory: (config: ConfigService) => ({ name: config.get('APP_NAME') }),
+   *   })
+   *
+   * `path` and `guards` define the MCP controller, so they are passed directly.
+   */
+  static forRootAsync(options: McpModuleAsyncOptions): DynamicModule {
+    return {
+      module: McpModule,
+      global: true,
+      imports: [DiscoveryModule, ...(options.imports ?? [])],
+      controllers: [createMcpController(options)],
+      providers: [
+        {
+          provide: MCP_MODULE_OPTIONS,
+          inject: options.inject ?? [],
+          useFactory: async (...args: unknown[]) => ({
+            ...(await options.useFactory(...args)),
+            ...(options.path ? { path: options.path } : {}),
+          }),
+        },
+        McpService,
+      ],
       exports: [McpService],
     };
   }

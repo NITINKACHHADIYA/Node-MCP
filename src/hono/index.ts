@@ -5,7 +5,8 @@ import { McpServer } from '../core/server.js';
 import type { Dispatcher, McpServerOptions, McpToolDefinition, RouteToolOptions, ToolContext } from '../core/types.js';
 
 interface HonoContextLike {
-  req: { method: string; raw: Request; header(): Record<string, string> };
+  // Hono >= 3 wraps the request (`c.req.raw`); in Hono 2 `c.req` is the Request itself.
+  req: { method: string; raw?: Request; header(): Record<string, string> };
   env?: unknown;
 }
 type HonoMiddleware = (c: HonoContextLike, next: () => Promise<void>) => Promise<void | Response>;
@@ -13,7 +14,7 @@ type HonoMiddleware = (c: HonoContextLike, next: () => Promise<void>) => Promise
 interface HonoLike {
   routes: { method: string; path: string; handler: unknown }[];
   request(input: string, init?: RequestInit, env?: unknown): Response | Promise<Response>;
-  on(method: string[], path: string, handler: (c: HonoContextLike) => Promise<Response>): unknown;
+  all(path: string, handler: (c: HonoContextLike) => Promise<Response>): unknown;
 }
 
 /**
@@ -72,11 +73,13 @@ export function mountMcp(app: HonoLike, options: HonoMcpOptions): McpServer {
     for (const r of options.routes ?? []) server.addTool(createRouteTool(r, r, dispatch, options));
   });
 
-  app.on(['GET', 'POST', 'DELETE'], path, async (c) => {
+  // `all` (not `on([...])`) works on every Hono major; non-POST methods get 405.
+  app.all(path, async (c) => {
+    const request = c.req.raw ?? (c.req as unknown as Request);
     const headers: Record<string, string> = {};
-    c.req.raw.headers.forEach((v, k) => (headers[k] = v));
+    request.headers.forEach((v, k) => (headers[k] = v));
     const ctx: ToolContext = { headers, raw: c };
-    const body = c.req.method === 'POST' ? await c.req.raw.text() : undefined;
+    const body = c.req.method === 'POST' ? await request.text() : undefined;
     const out = await server.handleHttp({ method: c.req.method, headers, body }, ctx);
     return new Response(out.body ?? null, { status: out.status, headers: out.headers });
   });

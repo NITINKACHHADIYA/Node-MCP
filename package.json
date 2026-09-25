@@ -1,7 +1,7 @@
 {
   "name": "mcp-expose",
-  "version": "0.1.0",
-  "description": "Turn the HTTP routes of your existing Node.js app (NestJS, Express, Fastify, Koa, Hono) into MCP tools for AI agents, reusing your auth, validation and rate limits.",
+  "version": "1.0.0",
+  "description": "Turn the HTTP routes of your existing Node.js app (NestJS, Express, Fastify, Koa, Hono, AdonisJS) into MCP tools for AI agents, reusing your auth, validation and rate limits.",
   "keywords": [
     "mcp",
     "model-context-protocol",
@@ -15,6 +15,7 @@
     "fastify",
     "koa",
     "hono",
+    "adonisjs",
     "openapi",
     "tools"
   ],
@@ -31,7 +32,7 @@
   "type": "module",
   "sideEffects": false,
   "engines": {
-    "node": ">=18.17"
+    "node": ">=20"
   },
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
@@ -52,6 +53,9 @@
       ],
       "hono": [
         "dist/hono/index.d.ts"
+      ],
+      "adonisjs": [
+        "dist/adonisjs/index.d.ts"
       ]
     }
   },
@@ -104,6 +108,14 @@
       "import": "./dist/hono/index.js",
       "require": "./dist/hono/index.cjs"
     },
+    "./adonisjs": {
+      "types": {
+        "import": "./dist/adonisjs/index.d.ts",
+        "require": "./dist/adonisjs/index.d.cts"
+      },
+      "import": "./dist/adonisjs/index.js",
+      "require": "./dist/adonisjs/index.cjs"
+    },
     "./package.json": "./package.json"
   },
   "files": [
@@ -134,15 +146,19 @@
     "release:dist-tag": "node scripts/release.mjs dist-tag"
   },
   "peerDependencies": {
+    "@adonisjs/core": ">=6",
     "@nestjs/common": ">=10",
     "@nestjs/core": ">=10",
     "class-validator": ">=0.14",
-    "express": ">=4",
-    "fastify": ">=4",
-    "hono": ">=4",
-    "koa": ">=2"
+    "express": ">=3",
+    "fastify": ">=3",
+    "hono": ">=2",
+    "koa": ">=1"
   },
   "peerDependenciesMeta": {
+    "@adonisjs/core": {
+      "optional": true
+    },
     "@nestjs/common": {
       "optional": true
     },
@@ -166,6 +182,8 @@
     }
   },
   "devDependencies": {
+    "@adonisjs/core": "^7.5.2",
+    "@adonisjs/http-server": "^9.3.1",
     "@arethetypeswrong/cli": "^0.18.5",
     "@eslint/js": "^10.0.1",
     "@koa/router": "^15.7.0",
