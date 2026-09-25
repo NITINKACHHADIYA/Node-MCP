@@ -35,8 +35,10 @@ describe('express adapter', () => {
     app.get('/health', (_req, res) => res.json({ ok: true }));
 
     const api = express.Router();
-    api.get('/orders', mcpTool({ description: 'List orders', query: { type: 'object', properties: { status: { type: 'string' } } } }), (req, res) =>
-      res.json({ status: req.query.status ?? 'any', orders: [] }),
+    api.get(
+      '/orders',
+      mcpTool({ description: 'List orders', query: { type: 'object', properties: { status: { type: 'string' } } } }),
+      (req, res) => res.json({ status: req.query.status ?? 'any', orders: [] }),
     );
     app.use('/api', api);
 
@@ -80,7 +82,10 @@ describe('express adapter', () => {
     });
     app.post(
       '/users',
-      mcpTool({ name: 'create_user', body: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] } }),
+      mcpTool({
+        name: 'create_user',
+        body: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] },
+      }),
       auth,
       (req, res) => {
         if (typeof req.body.name !== 'string') return res.status(400).json({ message: 'name must be a string' });

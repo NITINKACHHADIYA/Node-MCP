@@ -60,7 +60,7 @@ interface FastifyLike {
 declare module 'fastify' {
   interface FastifyInstance {
     /** The MCP server, e.g. to add tools with `app.mcpServer.addTool(defineTool(...))`. */
-    mcpServer: import('../core/server.js').McpServer;
+    mcpServer: McpServer;
   }
 }
 

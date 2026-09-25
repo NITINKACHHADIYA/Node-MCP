@@ -1,1 +1,3 @@
-{ "description": "Standalone MCP gateway (Express) in front of a separate, framework-less upstream API, driven by its OpenAPI document" }
+{
+  "description": "Standalone MCP gateway (Express) in front of a separate, framework-less upstream API, driven by its OpenAPI document"
+}

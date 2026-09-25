@@ -33,7 +33,9 @@ function sh(cmd, args, cwd, { quiet = true } = {}) {
     child.stdout?.on('data', (d) => (out += d));
     child.stderr?.on('data', (d) => (out += d));
     child.on('close', (code) =>
-      code === 0 ? resolvePromise(out) : reject(new Error(`${cmd} ${args.join(' ')} failed (${code}) in ${cwd}\n${out.slice(-3000)}`)),
+      code === 0
+        ? resolvePromise(out)
+        : reject(new Error(`${cmd} ${args.join(' ')} failed (${code}) in ${cwd}\n${out.slice(-3000)}`)),
     );
   });
 }
@@ -50,7 +52,8 @@ async function pool(items, size, fn) {
 async function waitForServer(url, child, logs, timeoutMs = 60_000) {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
-    if (child.exitCode !== null) throw new Error(`app exited with code ${child.exitCode}\n${logs.join('').slice(-3000)}`);
+    if (child.exitCode !== null)
+      throw new Error(`app exited with code ${child.exitCode}\n${logs.join('').slice(-3000)}`);
     try {
       await fetch(url, { method: 'GET' });
       return;

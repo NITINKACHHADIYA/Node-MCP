@@ -18,20 +18,33 @@ async function auth(ctx, next) {
   await next();
 }
 
-router.get('/products', mcpTool({ name: 'search_products', description: 'Search products', query: { type: 'object', properties: { q: { type: 'string' } } } }), (ctx) => {
-  const q = String(ctx.query.q || '').toLowerCase();
-  ctx.body = { items: products.filter((p) => p.name.toLowerCase().includes(q)) };
-});
+router.get(
+  '/products',
+  mcpTool({
+    name: 'search_products',
+    description: 'Search products',
+    query: { type: 'object', properties: { q: { type: 'string' } } },
+  }),
+  (ctx) => {
+    const q = String(ctx.query.q || '').toLowerCase();
+    ctx.body = { items: products.filter((p) => p.name.toLowerCase().includes(q)) };
+  },
+);
 
 router.get('/orders/:id', mcpTool({ name: 'get_order', description: 'Get an order' }), auth, (ctx) => {
   ctx.body = orders.get(ctx.params.id) || { error: 'not found' };
 });
 
-router.post('/orders',
+router.post(
+  '/orders',
   mcpTool({
     name: 'create_order',
     description: 'Create an order',
-    body: { type: 'object', properties: { sku: { type: 'string' }, quantity: { type: 'integer' } }, required: ['sku', 'quantity'] },
+    body: {
+      type: 'object',
+      properties: { sku: { type: 'string' }, quantity: { type: 'integer' } },
+      required: ['sku', 'quantity'],
+    },
   }),
   auth,
   (ctx) => {
@@ -45,7 +58,8 @@ router.post('/orders',
     orders.set(order.id, order);
     ctx.status = 201;
     ctx.body = order;
-  });
+  },
+);
 
 router.delete('/orders/:id', mcpTool({ name: 'cancel_order', description: 'Cancel an order' }), auth, (ctx) => {
   ctx.body = { id: ctx.params.id, status: 'cancelled' };
@@ -55,7 +69,9 @@ router.get('/whoami', mcpTool({ name: 'whoami', description: 'Debug' }), (ctx) =
   ctx.body = { tool: ctx.get('x-mcp-tool') || null };
 });
 
-router.get('/admin/stats', auth, (ctx) => { ctx.body = { orders: orders.size }; }); // not exposed
+router.get('/admin/stats', auth, (ctx) => {
+  ctx.body = { orders: orders.size };
+}); // not exposed
 
 app.use(bodyParser());
 app.use(koaMcp({ name: 'shop-api', routers: [router] }));

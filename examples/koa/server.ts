@@ -8,13 +8,9 @@ import { koaMcp, mcpTool } from 'mcp-expose/koa';
 const app = new Koa();
 const router = new Router({ prefix: '/api' });
 
-router.get(
-  '/weather/:city',
-  mcpTool({ name: 'get_weather', description: 'Current weather for a city.' }),
-  (ctx) => {
-    ctx.body = { city: ctx.params.city, tempC: 21, conditions: 'sunny' };
-  },
-);
+router.get('/weather/:city', mcpTool({ name: 'get_weather', description: 'Current weather for a city.' }), (ctx) => {
+  ctx.body = { city: ctx.params.city, tempC: 21, conditions: 'sunny' };
+});
 
 // Mount the MCP endpoint and tell it which routers to scan.
 app.use(koaMcp({ name: 'weather-api', routers: [router] }));

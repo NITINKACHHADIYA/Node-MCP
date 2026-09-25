@@ -68,7 +68,12 @@ describe('hono adapter', () => {
     const res = await app.request('/mcp', {
       method: 'POST',
       headers: { 'content-type': 'application/json', authorization: TOKEN },
-      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'get_user', arguments: { id: '3' } } }),
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: { name: 'get_user', arguments: { id: '3' } },
+      }),
     });
     const json = await res.json();
     expect(json.result.structuredContent).toEqual({ id: '3', name: 'User 3' });

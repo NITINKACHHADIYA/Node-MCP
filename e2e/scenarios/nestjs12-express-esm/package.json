@@ -2,7 +2,10 @@
   "name": "e2e-nestjs12-express-esm",
   "private": true,
   "type": "module",
-  "scripts": { "build": "tsc", "start": "node dist/main.js" },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/main.js"
+  },
   "dependencies": {
     "@nestjs/common": "^12.0.0",
     "@nestjs/core": "^12.0.0",
@@ -12,5 +15,8 @@
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1"
   },
-  "devDependencies": { "@types/node": "^22.0.0", "typescript": "^5.6.0" }
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0"
+  }
 }

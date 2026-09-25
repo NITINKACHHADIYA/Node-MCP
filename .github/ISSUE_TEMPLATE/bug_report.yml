@@ -1,0 +1,42 @@
+name: Bug report
+description: Something does not work as documented
+labels: [bug, triage]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for taking the time to report a bug. Please fill in as much as you can.
+  - type: dropdown
+    id: framework
+    attributes:
+      label: Framework
+      options: [NestJS, Express, Fastify, Koa, Hono, OpenAPI gateway, Core / other]
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: mcp-expose, framework, Node.js
+      placeholder: mcp-expose 0.1.0, @nestjs/core 11.1.0, Node 22.12
+    validations:
+      required: true
+  - type: input
+    id: client
+    attributes:
+      label: MCP client
+      placeholder: Claude Code, Cursor, MCP Inspector, …
+  - type: textarea
+    id: repro
+    attributes:
+      label: Minimal reproduction
+      description: The smallest route + setup that shows the problem (or a link to a repo).
+      render: ts
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected vs actual behaviour
+      description: Include the tools/list or tools/call request and response if possible.
+    validations:
+      required: true

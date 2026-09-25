@@ -151,13 +151,18 @@ export function mountMcp(app: ExpressAppLike, options: ExpressMcpOptions): McpSe
   server.onLoad(() => {
     const found = discoverExpressRoutes(app, options.routers);
     for (const r of options.routes ?? []) found.push({ method: r.method, path: r.path, options: r });
-    for (const f of found) server.addTool(createRouteTool({ method: f.method, path: f.path }, f.options, dispatch, options));
+    for (const f of found)
+      server.addTool(createRouteTool({ method: f.method, path: f.path }, f.options, dispatch, options));
   });
 
   const handler: Middleware = (req, res, next) => {
     (async () => {
       const body = req.method === 'POST' && req.body === undefined ? await readRawBody(req) : req.body;
-      const ctx: ToolContext = { headers: normalizeHeaders(req.headers), clientIp: req.ip ?? req.socket.remoteAddress, raw: req };
+      const ctx: ToolContext = {
+        headers: normalizeHeaders(req.headers),
+        clientIp: req.ip ?? req.socket.remoteAddress,
+        raw: req,
+      };
       const out = await server.handleHttp({ method: req.method ?? 'POST', headers: ctx.headers, body }, ctx);
       writeNodeResponse(res, out);
     })().catch(next);

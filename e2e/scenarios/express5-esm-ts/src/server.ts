@@ -20,10 +20,14 @@ function auth(req: Request, res: Response, next: NextFunction) {
 
 const shop = express.Router();
 
-shop.get('/products', mcpTool({ name: 'search_products', description: 'Search products', query: z.object({ q: z.string().optional() }) }), (req, res) => {
-  const q = String(req.query.q ?? '').toLowerCase();
-  res.json({ items: products.filter((p) => p.name.toLowerCase().includes(q)) });
-});
+shop.get(
+  '/products',
+  mcpTool({ name: 'search_products', description: 'Search products', query: z.object({ q: z.string().optional() }) }),
+  (req, res) => {
+    const q = String(req.query.q ?? '').toLowerCase();
+    res.json({ items: products.filter((p) => p.name.toLowerCase().includes(q)) });
+  },
+);
 
 shop.get('/orders/:id', mcpTool({ name: 'get_order', description: 'Get an order' }), auth, (req, res) => {
   const order = orders.get(req.params.id as string);
@@ -31,13 +35,18 @@ shop.get('/orders/:id', mcpTool({ name: 'get_order', description: 'Get an order'
   res.json(order);
 });
 
-shop.post('/orders', mcpTool({ name: 'create_order', description: 'Create an order', body: CreateOrder }), auth, (req, res) => {
-  const parsed = CreateOrder.safeParse(req.body);
-  if (!parsed.success) return void res.status(400).json({ error: parsed.error.issues });
-  const order = { id: String(orders.size + 1), ...parsed.data, status: 'pending' };
-  orders.set(order.id, order);
-  res.status(201).json(order);
-});
+shop.post(
+  '/orders',
+  mcpTool({ name: 'create_order', description: 'Create an order', body: CreateOrder }),
+  auth,
+  (req, res) => {
+    const parsed = CreateOrder.safeParse(req.body);
+    if (!parsed.success) return void res.status(400).json({ error: parsed.error.issues });
+    const order = { id: String(orders.size + 1), ...parsed.data, status: 'pending' };
+    orders.set(order.id, order);
+    res.status(201).json(order);
+  },
+);
 
 shop.delete('/orders/:id', mcpTool({ name: 'cancel_order', description: 'Cancel an order' }), auth, (req, res) => {
   res.json({ id: req.params.id, status: 'cancelled' });

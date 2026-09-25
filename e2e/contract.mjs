@@ -25,7 +25,9 @@ async function connect(url, headers = {}) {
 
 function assert(cond, message, detail) {
   if (!cond) {
-    const err = new Error(message + (detail === undefined ? '' : `\n      got: ${JSON.stringify(detail).slice(0, 400)}`));
+    const err = new Error(
+      message + (detail === undefined ? '' : `\n      got: ${JSON.stringify(detail).slice(0, 400)}`),
+    );
     throw err;
   }
 }
@@ -71,12 +73,24 @@ export async function runContract(url, opts = {}) {
     assert(tool('get_order')?.inputSchema.required?.includes('id'), 'get_order must require id', tool('get_order'));
     const c = tool('create_order')?.inputSchema;
     assert(c?.properties?.sku && c?.properties?.quantity, 'create_order must have sku + quantity', c);
-    assert(['sku', 'quantity'].every((k) => c.required?.includes(k)), 'sku + quantity must be required', c);
+    assert(
+      ['sku', 'quantity'].every((k) => c.required?.includes(k)),
+      'sku + quantity must be required',
+      c,
+    );
   });
 
   await check('annotations derived from HTTP method', async () => {
-    assert(tool('get_order')?.annotations?.readOnlyHint === true, 'GET should be readOnly', tool('get_order')?.annotations);
-    assert(tool('cancel_order')?.annotations?.destructiveHint === true, 'DELETE should be destructive', tool('cancel_order')?.annotations);
+    assert(
+      tool('get_order')?.annotations?.readOnlyHint === true,
+      'GET should be readOnly',
+      tool('get_order')?.annotations,
+    );
+    assert(
+      tool('cancel_order')?.annotations?.destructiveHint === true,
+      'DELETE should be destructive',
+      tool('cancel_order')?.annotations,
+    );
   });
 
   await check('public tool call returns structured JSON', async () => {
@@ -102,7 +116,11 @@ export async function runContract(url, opts = {}) {
 
   await check('POST body is built from arguments', async () => {
     const r = await authed.callTool({ name: 'create_order', arguments: { sku: 'KB-01', quantity: 2 } });
-    assert(!r.isError && r.structuredContent?.sku === 'KB-01' && Number(r.structuredContent?.quantity) === 2, 'bad create result', r);
+    assert(
+      !r.isError && r.structuredContent?.sku === 'KB-01' && Number(r.structuredContent?.quantity) === 2,
+      'bad create result',
+      r,
+    );
   });
 
   await check('DELETE with path param', async () => {
@@ -128,7 +146,11 @@ export async function runContract(url, opts = {}) {
   await check('foreign browser Origin is rejected (403)', async () => {
     const res = await fetch(url, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream', origin: 'https://evil.example' },
+      headers: {
+        'content-type': 'application/json',
+        accept: 'application/json, text/event-stream',
+        origin: 'https://evil.example',
+      },
       body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
     });
     assert(res.status === 403, 'expected 403', res.status);

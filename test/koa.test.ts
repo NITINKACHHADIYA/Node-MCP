@@ -36,7 +36,10 @@ describe('koa adapter', () => {
     });
     router.post(
       '/users',
-      mcpTool({ name: 'create_user', body: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] } }),
+      mcpTool({
+        name: 'create_user',
+        body: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] },
+      }),
       auth,
       (ctx) => {
         const body = (ctx.request as { body?: { name?: unknown } }).body ?? {};

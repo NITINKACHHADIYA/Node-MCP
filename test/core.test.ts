@@ -114,11 +114,22 @@ describe('McpServer', () => {
   it('validates Standard Schema input before running a tool', async () => {
     const server = new McpServer({ name: 't' });
     server.addTool(
-      defineTool({ name: 'add', description: 'Add', input: z.object({ a: z.number(), b: z.number() }), handler: ({ a, b }) => a + b }),
+      defineTool({
+        name: 'add',
+        description: 'Add',
+        input: z.object({ a: z.number(), b: z.number() }),
+        handler: ({ a, b }) => a + b,
+      }),
     );
-    const ok = await server.handleMessage({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'add', arguments: { a: 1, b: 2 } } }, { headers: {} });
+    const ok = await server.handleMessage(
+      { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'add', arguments: { a: 1, b: 2 } } },
+      { headers: {} },
+    );
     expect((ok as any).result.content[0].text).toBe('3');
-    const bad = await server.handleMessage({ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'add', arguments: { a: 'x' } } }, { headers: {} });
+    const bad = await server.handleMessage(
+      { jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'add', arguments: { a: 'x' } } },
+      { headers: {} },
+    );
     expect((bad as any).result.isError).toBe(true);
     expect((bad as any).result.content[0].text).toMatch(/^Invalid arguments: a:/);
   });

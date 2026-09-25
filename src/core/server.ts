@@ -80,10 +80,7 @@ export class McpServer {
   }
 
   /** Handle one JSON-RPC message (or a batch). Returns null when no response is due. */
-  async handleMessage(
-    message: unknown,
-    ctx: ToolContext,
-  ): Promise<JsonRpcResponse | JsonRpcResponse[] | null> {
+  async handleMessage(message: unknown, ctx: ToolContext): Promise<JsonRpcResponse | JsonRpcResponse[] | null> {
     if (Array.isArray(message)) {
       const results = (await Promise.all(message.map((m) => this.handleOne(m, ctx)))).filter(
         (r): r is JsonRpcResponse => r !== null,
