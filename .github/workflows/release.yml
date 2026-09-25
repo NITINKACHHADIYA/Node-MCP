@@ -1,38 +1,139 @@
 name: Release
 
-# Publishes to npm when a version tag is pushed:
-#   npm version patch|minor|major && git push --follow-tags
+# Two ways to release (see RELEASING.md):
+#
+# 1. From GitHub: Actions → Release → "Run workflow", pick the branch
+#    (`main` for the current major, `v3.x` for a fix to the 3.x line) and the bump.
+#    The workflow bumps the version, updates CHANGELOG.md, pushes the commit + tag
+#    to that branch and publishes.
+# 2. From a terminal: `npm version <bump>` on the branch, then `git push --follow-tags`.
+#    Pushing the tag publishes.
+#
+# npm dist-tags: newest stable → `latest`, older major lines → `latest-<major>`,
+# prereleases → `next`. A 3.x fix never replaces `latest` when 5.x is current.
+
 on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Version bump
+        type: choice
+        options: [patch, minor, major, prepatch, preminor, premajor, prerelease]
+        default: patch
+      preid:
+        description: Prerelease identifier (only for pre* bumps)
+        default: beta
   push:
     tags: ['v*.*.*']
 
 permissions:
-  contents: write # create the GitHub release
-  id-token: write # npm provenance
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
-  publish:
+  prepare:
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    environment: npm
+    permissions:
+      contents: write # push the version commit and tag
+    outputs:
+      tag: ${{ steps.bump.outputs.tag }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+      - name: Bump version and update CHANGELOG.md
+        id: bump
+        env:
+          BUMP: ${{ inputs.bump }}
+          PREID: ${{ inputs.preid }}
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          if [[ "$BUMP" == pre* ]]; then npm version "$BUMP" --preid "$PREID"; else npm version "$BUMP"; fi
+          VERSION=$(node -p "require('./package.json').version")
+          node scripts/release.mjs check-branch "$BRANCH" "$VERSION"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+      - run: npm run build
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run check:package
+      - name: Push commit and tag
+        env:
+          BRANCH: ${{ github.ref_name }}
+          TAG: ${{ steps.bump.outputs.tag }}
+        run: git push --atomic origin "HEAD:refs/heads/$BRANCH" "refs/tags/$TAG"
+
+  publish:
+    needs: prepare
+    # Runs after `prepare` (manual release) or directly on a pushed tag.
+    if: >-
+      always() &&
+      (needs.prepare.result == 'success' ||
+       (github.event_name == 'push' && needs.prepare.result == 'skipped'))
+    runs-on: ubuntu-latest
+    environment: npm
+    permissions:
+      contents: write # create the GitHub release
+      id-token: write # npm provenance
+    env:
+      TAG: ${{ needs.prepare.outputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.prepare.outputs.tag || github.ref }}
+          fetch-depth: 0
       - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
           cache: npm
           registry-url: https://registry.npmjs.org
       - run: npm ci
-      - name: Check tag matches package.json version
-        run: test "v$(node -p "require('./package.json').version")" = "$GITHUB_REF_NAME"
+      - name: Validate tag, version and branch
+        id: meta
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          test "v$VERSION" = "$TAG" || { echo "::error::Tag $TAG does not match package.json version $VERSION"; exit 1; }
+          MAJOR=${VERSION%%.*}
+          # The tagged commit must be on main or on this major's maintenance branch.
+          if git merge-base --is-ancestor HEAD origin/main; then BRANCH=main
+          elif git rev-parse -q --verify "origin/v$MAJOR.x" >/dev/null && git merge-base --is-ancestor HEAD "origin/v$MAJOR.x"; then BRANCH="v$MAJOR.x"
+          else echo "::error::$TAG is not on main or v$MAJOR.x"; exit 1; fi
+          node scripts/release.mjs check-branch "$BRANCH" "$VERSION"
+          DIST_TAG=$(node scripts/release.mjs dist-tag "$VERSION")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "dist_tag=$DIST_TAG" >> "$GITHUB_OUTPUT"
+          echo "Publishing $VERSION from $BRANCH under dist-tag '$DIST_TAG'" >> "$GITHUB_STEP_SUMMARY"
       - run: npm run build
-      - run: npm run typecheck
       - run: npm test
       - run: npm run check:package
-      # Provenance attestations require a public repository.
-      - run: npm publish --access public ${{ github.event.repository.private && ' ' || '--provenance' }}
+      - name: Publish to npm
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          DIST_TAG: ${{ steps.meta.outputs.dist_tag }}
+          # Provenance attestations require a public repository.
+          PROVENANCE: ${{ github.event.repository.private && 'false' || 'true' }}
+        run: |
+          ARGS=(--access public --tag "$DIST_TAG")
+          if [ "$PROVENANCE" = "true" ]; then ARGS+=(--provenance); fi
+          npm publish "${ARGS[@]}"
       - name: Create GitHub release
-        run: gh release create "$GITHUB_REF_NAME" --generate-notes --verify-tag
         env:
           GH_TOKEN: ${{ github.token }}
+          DIST_TAG: ${{ steps.meta.outputs.dist_tag }}
+        run: |
+          ARGS=(--generate-notes --verify-tag)
+          if [ "$DIST_TAG" = "next" ]; then ARGS+=(--prerelease); fi
+          if [ "$DIST_TAG" != "latest" ]; then ARGS+=(--latest=false); fi
+          gh release create "$TAG" "${ARGS[@]}"

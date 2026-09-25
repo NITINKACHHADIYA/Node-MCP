@@ -129,7 +129,9 @@
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "check:package": "publint && attw --pack ."
+    "check:package": "publint && attw --pack .",
+    "version": "node scripts/release.mjs changelog && git add CHANGELOG.md",
+    "release:dist-tag": "node scripts/release.mjs dist-tag"
   },
   "peerDependencies": {
     "@nestjs/common": ">=10",
@@ -177,7 +179,6 @@
     "@swc/core": "^1.16.2",
     "@types/express": "^5.0.6",
     "@types/koa": "^3.0.3",
-    "@types/koa__router": "^12.0.5",
     "@types/node": "^26.6.2",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
@@ -191,6 +192,7 @@
     "publint": "^0.3.24",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
+    "semver": "^7.8.5",
     "tsup": "^8.5.1",
     "tsx": "^4.23.15",
     "typescript": "^5.9.3",

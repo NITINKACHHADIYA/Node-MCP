@@ -16,3 +16,4 @@
 - [ ] `npm run test:e2e` passes (for adapter or packaging changes)
 - [ ] README / docs updated if behaviour or options changed
 - [ ] Entry added under "Unreleased" in `CHANGELOG.md`
+- [ ] Should this be backported to an older major? If so, name the `v<major>.x` branch(es)

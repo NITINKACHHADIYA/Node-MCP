@@ -18,3 +18,5 @@ updates:
     directory: /
     schedule:
       interval: weekly
+# When a maintenance branch (e.g. v3.x) exists, add a copy of the npm entry above
+# with `target-branch: v3.x` so its dependencies keep receiving security updates.

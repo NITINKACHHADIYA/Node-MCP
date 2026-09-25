@@ -52,11 +52,17 @@ npm test
 - Add a line under **Unreleased** in `CHANGELOG.md`.
 - Use clear commit messages in the imperative mood ("Add Koa router prefix support").
 
+## Fixes for older versions
+
+Older major versions are maintained on `v<major>.x` branches. If your fix also applies to an older
+supported major, say so in the PR. Maintainers add a `backport v3.x` label, and a backport PR is created
+automatically when yours is merged. For a bug that exists only in an old version, open the PR against
+that `v<major>.x` branch directly.
+
 ## Releasing (maintainers)
 
-1. Move the **Unreleased** changelog entries under a new version heading.
-2. `npm version <patch|minor|major>` (creates the commit and the `vX.Y.Z` tag).
-3. `git push --follow-tags`. The Release workflow tests, publishes to npm with provenance and creates the GitHub release.
+See [RELEASING.md](RELEASING.md) for versioning rules, dist-tags, maintenance branches and backports.
+In short: _Actions → Release → Run workflow_, pick the branch (`main` or `v3.x`) and the bump.
 
 By contributing you agree that your contributions are licensed under the MIT License and that you follow the
 [Code of Conduct](CODE_OF_CONDUCT.md).

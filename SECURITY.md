@@ -4,9 +4,21 @@ mcp-expose sits between AI agents and your API, so we take security reports seri
 
 ## Supported versions
 
-| Version            | Supported |
-| ------------------ | --------- |
-| 0.x (latest minor) | ✅        |
+Several major versions are maintained in parallel. See [RELEASING.md](RELEASING.md) for how fixes are
+backported and released.
+
+| Major version          | Status                                                      | Receives                        |
+| ---------------------- | ----------------------------------------------------------- | ------------------------------- |
+| Current (latest major) | Active                                                      | Features, fixes, security fixes |
+| Previous major         | Maintenance, for 12 months after the next major is released | Bug fixes and security fixes    |
+| Older majors           | Security only, for 6 more months, then end of life          | Critical security fixes         |
+| End of life            | Unsupported                                                 | Nothing. Deprecated on npm.     |
+
+Current status:
+
+| Version | Status |
+| ------- | ------ |
+| 0.x     | Active |
 
 ## Reporting a vulnerability
 

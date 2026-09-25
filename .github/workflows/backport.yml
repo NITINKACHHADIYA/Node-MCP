@@ -1,0 +1,25 @@
+name: Backport
+
+# Add a label like `backport v3.x` to a pull request (before or after merging).
+# When it is merged, a pull request cherry-picking it onto `v3.x` is opened
+# automatically. Several labels backport to several branches.
+on:
+  pull_request_target:
+    types: [closed, labeled]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  backport:
+    if: >-
+      github.event.pull_request.merged &&
+      contains(toJSON(github.event.pull_request.labels.*.name), '"backport v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: korthout/backport-action@v4
+        with:
+          label_pattern: ^backport (v\d+\.x)$
+          pull_title: '[${target_branch}] ${pull_title}'

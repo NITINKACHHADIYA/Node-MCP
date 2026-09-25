@@ -47,6 +47,7 @@ app.get('/orders/:id', { schema, config: { mcp: { description: 'Get an order by 
 11. [Writing tools agents use well](#writing-tools-agents-use-well)
 12. [Limitations and roadmap](#limitations-and-roadmap)
 13. [Development](#development)
+14. [Versioning and support](#versioning-and-support)
 
 ---
 
@@ -600,6 +601,13 @@ test/          one shared behavioural contract, verified against every adapter
 
 Adding an adapter: find the marked routes, then call `createRouteTool(route, options, dispatcher)` and
 `server.handleHttp()`. Reuse `test/helpers.ts#assertAdapterContract` to test it.
+
+## Versioning and support
+
+mcp-expose follows [Semantic Versioning](https://semver.org). Older major versions keep receiving fixes on
+maintenance branches, published under `latest-<major>` dist-tags (for example `npm i mcp-expose@latest-3`),
+so a fix to an old major never changes what `npm i mcp-expose` installs. See the
+[support policy](SECURITY.md#supported-versions) and [RELEASING.md](RELEASING.md).
 
 ## Contributing
 
