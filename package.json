@@ -1,0 +1,168 @@
+{
+  "name": "mcp-expose",
+  "version": "0.1.0",
+  "description": "Turn the HTTP routes of your existing Node.js app (NestJS, Express, Fastify, Koa, Hono) into MCP tools for AI agents, reusing your auth, validation and rate limits.",
+  "type": "module",
+  "license": "MIT",
+  "author": "Nitin Kachhadiya",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "ai",
+    "agents",
+    "llm",
+    "claude",
+    "cursor",
+    "nestjs",
+    "express",
+    "fastify",
+    "koa",
+    "hono",
+    "openapi",
+    "tools"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/NITINKACHHADIYA/Node-MCP.git"
+  },
+  "bugs": {
+    "url": "https://github.com/NITINKACHHADIYA/Node-MCP/issues"
+  },
+  "homepage": "https://github.com/NITINKACHHADIYA/Node-MCP#readme",
+  "engines": {
+    "node": ">=18.17"
+  },
+  "sideEffects": false,
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": {
+        "import": "./dist/index.d.ts",
+        "require": "./dist/index.d.cts"
+      },
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./express": {
+      "types": {
+        "import": "./dist/express/index.d.ts",
+        "require": "./dist/express/index.d.cts"
+      },
+      "import": "./dist/express/index.js",
+      "require": "./dist/express/index.cjs"
+    },
+    "./nestjs": {
+      "types": {
+        "import": "./dist/nestjs/index.d.ts",
+        "require": "./dist/nestjs/index.d.cts"
+      },
+      "import": "./dist/nestjs/index.js",
+      "require": "./dist/nestjs/index.cjs"
+    },
+    "./fastify": {
+      "types": {
+        "import": "./dist/fastify/index.d.ts",
+        "require": "./dist/fastify/index.d.cts"
+      },
+      "import": "./dist/fastify/index.js",
+      "require": "./dist/fastify/index.cjs"
+    },
+    "./koa": {
+      "types": {
+        "import": "./dist/koa/index.d.ts",
+        "require": "./dist/koa/index.d.cts"
+      },
+      "import": "./dist/koa/index.js",
+      "require": "./dist/koa/index.cjs"
+    },
+    "./hono": {
+      "types": {
+        "import": "./dist/hono/index.d.ts",
+        "require": "./dist/hono/index.d.cts"
+      },
+      "import": "./dist/hono/index.js",
+      "require": "./dist/hono/index.cjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -p .",
+    "prepublishOnly": "npm run build && npm run typecheck && npm test",
+    "example:express": "tsx examples/express/server.ts",
+    "example:fastify": "tsx examples/fastify/server.ts",
+    "example:koa": "tsx examples/koa/server.ts",
+    "example:hono": "tsx examples/hono/server.ts",
+    "example:nestjs": "node --import @swc-node/register/esm-register examples/nestjs/main.ts",
+    "example:gateway": "tsx examples/openapi-gateway/server.ts"
+  },
+  "peerDependencies": {
+    "@nestjs/common": ">=9",
+    "@nestjs/core": ">=9",
+    "class-validator": ">=0.14",
+    "express": ">=4",
+    "fastify": ">=4",
+    "hono": ">=4",
+    "koa": ">=2"
+  },
+  "peerDependenciesMeta": {
+    "@nestjs/common": {
+      "optional": true
+    },
+    "@nestjs/core": {
+      "optional": true
+    },
+    "class-validator": {
+      "optional": true
+    },
+    "express": {
+      "optional": true
+    },
+    "fastify": {
+      "optional": true
+    },
+    "hono": {
+      "optional": true
+    },
+    "koa": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@koa/router": "^15.7.0",
+    "@nestjs/common": "^12.1.0",
+    "@nestjs/core": "^12.1.0",
+    "@nestjs/platform-express": "^12.1.0",
+    "@nestjs/platform-fastify": "^12.1.0",
+    "@nestjs/testing": "^12.1.0",
+    "@swc-node/register": "^1.12.1",
+    "@swc/core": "^1.16.2",
+    "@types/express": "^5.0.6",
+    "@types/koa": "^3.0.3",
+    "@types/koa__router": "^12.0.5",
+    "@types/node": "^26.6.2",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.15.1",
+    "express": "^5.2.1",
+    "fastify": "^5.12.5",
+    "hono": "^4.13.9",
+    "koa": "^3.2.1",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2",
+    "tsup": "^8.5.1",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3",
+    "unplugin-swc": "^2.0.0",
+    "vitest": "^5.0.1",
+    "zod": "^4.6.5"
+  }
+}
