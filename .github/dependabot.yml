@@ -7,6 +7,12 @@ updates:
     groups:
       dev-dependencies:
         dependency-type: development
+        update-types: [minor, patch]
+    ignore:
+      # TypeScript 7 (native compiler) is not yet supported by tsup, typescript-eslint
+      # and @swc-node/register (peer range < 7). Revisit when they add support.
+      - dependency-name: typescript
+        update-types: ['version-update:semver-major']
     open-pull-requests-limit: 10
   - package-ecosystem: github-actions
     directory: /
