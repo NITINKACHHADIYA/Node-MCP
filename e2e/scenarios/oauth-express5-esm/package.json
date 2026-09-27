@@ -1,12 +1,13 @@
 {
-  "name": "e2e-openapi-gateway-esm",
+  "name": "e2e-oauth-express5-esm",
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node gateway.js"
+    "start": "node server.js"
   },
   "dependencies": {
     "express": "^5.1.0",
+    "express-rate-limit": "^7.4.0",
     "jose": "^6.0.0"
   }
 }

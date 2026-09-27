@@ -1,6 +1,7 @@
 // Express 3 (legacy): app-level routes and the bundled connect body parser.
 const express = require('express');
 const { mcpTool, mountMcp } = require('mcp-expose/express');
+const { jwtVerifier } = require('mcp-expose/oauth');
 
 const app = express();
 app.use(express.json());
@@ -67,7 +68,22 @@ app.get('/admin/stats', auth, function (req, res) {
   res.json({ orders: Object.keys(orders).length });
 });
 
-mountMcp(app, { name: 'shop-api' });
+// OAuth mode: e2e/run.mjs runs every scenario a second time with MCP_OAUTH_RESOURCE set.
+// `e2e-token` stays valid (the routes' own auth expects it); other tokens must be JWTs signed by the test issuer.
+const oauthResource = process.env.MCP_OAUTH_RESOURCE;
+const verifyJwt = oauthResource
+  ? jwtVerifier({ issuer: 'https://auth.e2e.test', jwks: JSON.parse(process.env.MCP_OAUTH_JWKS) })
+  : undefined;
+const oauth = oauthResource
+  ? {
+      resource: oauthResource,
+      authorizationServers: ['https://auth.e2e.test'],
+      requiredScopes: ['mcp'],
+      verifyToken: (token, ctx) => (token === 'e2e-token' ? { token, scopes: ['mcp'] } : verifyJwt(token, ctx)),
+    }
+  : undefined;
+
+mountMcp(app, { name: 'shop-api', oauth });
 
 app.listen(Number(process.env.PORT), '127.0.0.1', function () {
   console.log('READY');

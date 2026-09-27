@@ -1,9 +1,26 @@
 import rateLimit from '@fastify/rate-limit';
 import Fastify from 'fastify';
 import { fastifyMcp } from 'mcp-expose/fastify';
+import { jwtVerifier, type VerifyTokenContext } from 'mcp-expose/oauth';
+
+// OAuth mode: e2e/run.mjs runs every scenario a second time with MCP_OAUTH_RESOURCE set.
+// `e2e-token` stays valid (the routes' own auth expects it); other tokens must be JWTs signed by the test issuer.
+const oauthResource = process.env.MCP_OAUTH_RESOURCE;
+const verifyJwt = oauthResource
+  ? jwtVerifier({ issuer: 'https://auth.e2e.test', jwks: JSON.parse(process.env.MCP_OAUTH_JWKS!) })
+  : undefined;
+const oauth = oauthResource
+  ? {
+      resource: oauthResource,
+      authorizationServers: ['https://auth.e2e.test'],
+      requiredScopes: ['mcp'],
+      verifyToken: (token: string, ctx: VerifyTokenContext) =>
+        token === 'e2e-token' ? { token, scopes: ['mcp'] } : verifyJwt!(token, ctx),
+    }
+  : undefined;
 
 const app = Fastify();
-await app.register(fastifyMcp, { name: 'shop-api' });
+await app.register(fastifyMcp, { name: 'shop-api', oauth });
 await app.register(rateLimit, { global: false });
 
 type Order = { id: string; sku: string; quantity: number; status: string };

@@ -32,6 +32,7 @@ router.get('/orders/:id', [OrdersController, 'show']).use(middleware.auth()).mcp
 - Zero runtime dependencies. Dual ESM/CJS. Node.js 20, 22 and 24, plus Bun, Deno and Workers for Hono.
 - Supports the current **and the two previous major versions** of every framework, verified end to end.
 - Speaks MCP Streamable HTTP (protocol `2024-11-05` → `2025-11-25`), stateless, so it scales horizontally and runs serverless.
+- Built-in [OAuth 2.1](#oauth-sign-in-from-ai-clients): AI clients discover your identity provider and sign the user in by themselves (Auth0, Okta, Keycloak, Entra ID, Clerk, Cognito, ...).
 
 ---
 
@@ -44,14 +45,15 @@ router.get('/orders/:id', [OrdersController, 'show']).use(middleware.auth()).mcp
 5. [Framework guides](#framework-guides)
    - [NestJS](#nestjs) · [Express](#express) · [Fastify](#fastify) · [Koa](#koa) · [Hono](#hono) · [AdonisJS](#adonisjs) · [Any API via OpenAPI](#any-api-via-openapi-standalone-gateway)
 6. [Connect an AI client](#connect-an-ai-client)
-7. [Defining tool inputs (schemas)](#defining-tool-inputs-schemas)
-8. [Configuration reference](#configuration-reference)
-9. [Custom (non-HTTP) tools](#custom-non-http-tools)
-10. [Security checklist](#security-checklist)
-11. [Writing tools agents use well](#writing-tools-agents-use-well)
-12. [Limitations and roadmap](#limitations-and-roadmap)
-13. [Development](#development)
-14. [Versioning and support](#versioning-and-support)
+7. [OAuth: sign in from AI clients](#oauth-sign-in-from-ai-clients)
+8. [Defining tool inputs (schemas)](#defining-tool-inputs-schemas)
+9. [Configuration reference](#configuration-reference)
+10. [Custom (non-HTTP) tools](#custom-non-http-tools)
+11. [Security checklist](#security-checklist)
+12. [Writing tools agents use well](#writing-tools-agents-use-well)
+13. [Limitations and roadmap](#limitations-and-roadmap)
+14. [Development](#development)
+15. [Versioning and support](#versioning-and-support)
 
 ---
 
@@ -466,7 +468,8 @@ This also works with `@nestjs/swagger`, `@fastify/swagger`, tsoa and hono-openap
 ## Connect an AI client
 
 Start your app, then point a client at `http://localhost:3000/mcp`. Pass the same credentials a normal API
-client would use. They are forwarded to your routes.
+client would use. They are forwarded to your routes. (With the [`oauth` option](#oauth-sign-in-from-ai-clients)
+you skip the header: the client signs the user in by itself.)
 
 **Claude Code**
 
@@ -534,6 +537,89 @@ curl -s localhost:3000/mcp -H 'content-type: application/json' \
 
 ---
 
+## OAuth: sign in from AI clients
+
+Pasting a token into a client config works for development. For real users, turn on the `oauth` option:
+mcp-expose then implements the [MCP authorization spec](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization),
+so Claude, Cursor, VS Code and other clients open your normal login page, get a token for the user, and
+send it on every call. Nothing is pasted by hand.
+
+```
+AI client ── POST /mcp (no token) ─────────────▶ 401  WWW-Authenticate: Bearer resource_metadata=".../.well-known/oauth-protected-resource/mcp"
+AI client ── GET  /.well-known/oauth-protected-resource/mcp ─▶ { resource, authorization_servers: ["https://login.example.com"] }
+AI client ◀──── login in the browser (your IdP: Auth0, Okta, Keycloak, Entra ID, Clerk, Cognito, ...) ────▶ access token
+AI client ── POST /mcp  Authorization: Bearer <token> ─▶ mcp-expose checks the token ─▶ your route (token forwarded, guards run)
+```
+
+mcp-expose is the **resource server**. Your identity provider stays the **authorization server**, so user
+accounts, login pages and MFA stay where they are.
+
+### 1. Configure it
+
+```ts
+import { jwtVerifier } from 'mcp-expose/oauth'; // npm install jose
+
+const oauth = {
+  // The public URL of your MCP endpoint. Tokens must be issued for exactly this audience.
+  resource: 'https://api.example.com/mcp',
+  authorizationServers: ['https://example.auth0.com/'],
+  requiredScopes: ['mcp:tools'], // optional: needed for any MCP access
+  verifyToken: jwtVerifier({ issuer: 'https://example.auth0.com/' }),
+};
+```
+
+Pass it as `oauth` to any adapter:
+
+```ts
+McpModule.forRoot({ name: 'shop-api', oauth, decorators: [Public()] }); // NestJS (see note below)
+mountMcp(app, { name: 'shop-api', oauth }); // Express, Koa, Hono, AdonisJS
+await app.register(fastifyMcp, { name: 'shop-api', oauth }); // Fastify
+```
+
+That's it. The adapter:
+
+- serves the Protected Resource Metadata ([RFC 9728](https://www.rfc-editor.org/rfc/rfc9728)) at `/.well-known/oauth-protected-resource/mcp` (and `/.well-known/oauth-protected-resource`), public and CORS-enabled, outside any global prefix, guard or MCP middleware;
+- answers requests without a valid token with `401` and a `WWW-Authenticate` challenge that starts the client's login;
+- rejects tokens that were not issued for this resource (audience check), which blocks token passthrough from other services;
+- forwards the verified `Authorization` header to your routes, so your guards see the same user;
+- exposes the verified token to custom tools as `ctx.auth` (`subject`, `scopes`, `clientId`, `claims`).
+
+### 2. Per-tool scopes (step-up)
+
+```ts
+@Delete(':id')
+@McpTool({ name: 'cancel_order', scopes: ['orders:write'] })
+cancel(@Param('id') id: string) { ... }
+```
+
+A token without `orders:write` gets `403 insufficient_scope` naming the scopes it needs (plus the ones it already has, so the new token doesn't lose access). MCP clients then ask
+the user to approve the extra access and retry. All tool scopes are advertised in `scopes_supported`.
+`scopes` works on every marker (`mcpTool()`, `config.mcp`, `.mcp()`, `defineTool()`).
+
+### Token verifiers
+
+| Verifier                                                            | Use it for                                                                                                                                                                                            |
+| ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `jwtVerifier({ issuer })`                                           | JWT access tokens. Keys come from the issuer's JWKS (found through its metadata, or set `jwksUri` / `jwks`). Checks signature (asymmetric algorithms only), `iss`, `aud`, `exp`, `nbf`. Needs `jose`. |
+| `introspectionVerifier({ issuer, clientId, clientSecret })`         | Opaque tokens, via [RFC 7662](https://www.rfc-editor.org/rfc/rfc7662) introspection (Keycloak, Okta, ORY, Authlete, ...). Checks `active`, `aud` and `iss`, and caches results for 60 s.              |
+| `verifyToken: async (token, { resource }) => AuthInfo \| undefined` | Anything else, such as your existing session or API-key lookup. Return `undefined` to reject the token.                                                                                               |
+
+`jwtVerifier` checks that `aud` equals `resource` by default. If your provider uses another audience
+identifier (for example an Auth0 API identifier), set `audience`.
+
+### Provider notes
+
+- **The authorization server must support the MCP client flow:** authorization code with PKCE, and ideally
+  dynamic client registration ([RFC 7591](https://www.rfc-editor.org/rfc/rfc7591)) or client ID metadata documents,
+  so clients can register themselves. Many providers support this (for example Auth0, Keycloak, WorkOS and Stytch); with others, pre-register the client and give users its client ID.
+- **Your routes must accept the same token.** It is forwarded unchanged. If your API normally checks a different
+  audience, allow the MCP resource too, or set `forwardHeaders` to drop `authorization` and authorise
+  with a custom tool using `ctx.auth`.
+- **NestJS global guards** (an `APP_GUARD` that requires a session) run before the MCP controller and would answer 401 without the
+  OAuth challenge. Pass your "public" decorator with `decorators: [Public()]` so the guard lets MCP requests through;
+  mcp-expose checks the token itself. Likewise, don't also put auth `middleware`, `guards`, `routeOptions` hooks or `configureRoute` middleware on the MCP endpoint.
+- **Behind a proxy**, `resource` must be the public URL the client connects to (`https://...`), not the internal one.
+
 ## Defining tool inputs (schemas)
 
 The agent sees **one flat object** of arguments. mcp-expose maps each argument back to the right place:
@@ -575,12 +661,14 @@ Your app's own validation always runs as well. The schema tells the agent what t
 | `allowedOrigins`   | `string[] \| '*'`     | `[]`                                                       | Browser origins allowed to call the endpoint. Requests without `Origin` (CLIs, IDEs, servers) are always allowed.                  |
 | `forwardHeaders`   | `string[]`            | `['authorization','cookie','x-api-key','accept-language']` | Headers copied from the MCP request to the internal API call.                                                                      |
 | `maxResponseChars` | `number`              | `100000`                                                   | Longer API responses are truncated before reaching the model.                                                                      |
+| `oauth`            | `OAuthOptions`        | none                                                       | Protect the endpoint with OAuth 2.1. See [OAuth](#oauth-sign-in-from-ai-clients).                                                  |
 | `tools`            | `McpToolDefinition[]` | `[]`                                                       | Extra hand-written tools.                                                                                                          |
 | `baseUrl`          | `string`              | loopback                                                   | _Express/Koa/Nest/Adonis._ Where internal calls go. Set it for HTTPS with self-signed certs, unix sockets, or a separate API host. |
 | `routes`           | `{method,path,...}[]` | `[]`                                                       | _Express/Koa/Hono._ Expose routes without editing them.                                                                            |
 | `routers`          | see guide             | none                                                       | _Express:_ `{ '/prefix': router }`. _Koa:_ `[router]`.                                                                             |
 | `middleware`       | `Middleware[]`        | `[]`                                                       | _Express._ Middleware in front of `/mcp`, such as auth.                                                                            |
 | `guards`           | `CanActivate[]`       | `[]`                                                       | _NestJS._ Guards on the MCP controller.                                                                                            |
+| `decorators`       | `ClassDecorator[]`    | `[]`                                                       | _NestJS._ Extra decorators on the MCP controller, e.g. `[Public()]` for global guards.                                             |
 | `pathPrefix`       | `string`              | none                                                       | _NestJS._ Extra prefix for tool routes. Global prefix and URI versioning are automatic.                                            |
 | `routeOptions`     | `object`              | none                                                       | _Fastify._ Extra route options for `/mcp`, such as `onRequest` hooks.                                                              |
 | `configureRoute`   | `(route) => void`     | none                                                       | _AdonisJS._ Configure the MCP route, e.g. add middleware.                                                                          |
@@ -595,6 +683,7 @@ Your app's own validation always runs as well. The schema tells the agent what t
 | `input` / `params` / `query` / `body` | Schemas, see [above](#defining-tool-inputs-schemas).                                                                                                                |
 | `annotations`                         | MCP hints: `readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`. Defaults come from the HTTP method (GET → read-only, DELETE → destructive).        |
 | `headers`                             | Static headers added to the internal request.                                                                                                                       |
+| `scopes`                              | OAuth scopes the token needs to call this tool (with the `oauth` option). Missing scopes answer `403 insufficient_scope`.                                           |
 
 Each internal request also carries `X-Mcp-Tool: <tool name>`, so you can log or meter agent traffic separately.
 
@@ -616,12 +705,12 @@ const convert = defineTool({
 mountMcp(app, { name: 'shop-api', tools: [convert] });
 ```
 
-Handlers can return a string, any JSON value, or a full MCP `ToolResult`. `ctx.headers` holds the MCP request's headers, so you can authenticate there too.
+Handlers can return a string, any JSON value, or a full MCP `ToolResult`. `ctx.headers` holds the MCP request's headers, so you can authenticate there too. With the `oauth` option, `ctx.auth` holds the verified token (`subject`, `scopes`, `clientId`, `claims`).
 
 ## Security checklist
 
 - **Opt-in only.** Nothing is exposed unless you mark it. Review marked routes the way you review a public API, because an LLM can call them with any arguments.
-- **Use per-user credentials.** Clients send their own token, the token is forwarded, and your guards authorise the call. Avoid one shared super-token.
+- **Use per-user credentials.** Clients send their own token, the token is forwarded, and your guards authorise the call. Avoid one shared super-token. For remote servers, prefer the [`oauth` option](#oauth-sign-in-from-ai-clients): users sign in through your identity provider, tokens are audience-checked, and sensitive tools can require extra `scopes`.
 - **Protect discovery too** if tool names are sensitive (`guards`, `middleware`, `routeOptions`).
 - **Rate limits and IPs:** the agent IP is sent as `X-Forwarded-For`. For loopback adapters, trust loopback only: Express `app.set('trust proxy', 'loopback')`, Koa `app.proxy = true` behind a proxy that overwrites the header, Nest (Express) `app.set('trust proxy', 'loopback')`. Fastify `inject()` sets the IP directly.
 - **Browser access:** keep `allowedOrigins` empty unless a browser app must call `/mcp` directly.
@@ -649,7 +738,7 @@ Current scope (1.x):
 
 Planned (non-breaking, 1.x minor releases):
 
-- OAuth 2.1 protected-resource metadata (RFC 9728) helpers for remote MCP auth, and per-user tool lists
+- Per-user tool lists (hide tools the token's scopes can't call)
 - Next.js route handlers, Hapi and Elysia adapters
 - Structured output schemas, and binary/file responses
 - Streaming long-running responses over SSE
@@ -663,7 +752,7 @@ Contributions are welcome. See [Development](#development).
 ```bash
 npm install
 npm test            # vitest: core + all six adapters (real servers, real HTTP)
-npm run test:e2e    # pack → install into 18 fresh framework projects → official MCP SDK client
+npm run test:e2e    # pack → install into 19 fresh framework projects → official MCP SDK client (with and without OAuth)
 npm run typecheck
 npm run build       # ESM + CJS + .d.ts into dist/
 

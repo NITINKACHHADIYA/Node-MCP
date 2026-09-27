@@ -82,3 +82,70 @@ export async function assertAdapterContract(mcpUrl: string, names: { get: string
   const evil = await rpc(mcpUrl, 'tools/list', {}, { origin: 'https://evil.example' });
   expect(evil.status).toBe(403);
 }
+
+/** OAuth options used by the adapter tests: `Bearer secret` is valid, `Bearer noscope` lacks the `mcp` scope. */
+export const OAUTH = {
+  resource: 'https://mcp.example.com/mcp',
+  authorizationServers: ['https://auth.example.com'],
+  requiredScopes: ['mcp'],
+  resourceName: 'Test API',
+  verifyToken: (token: string) =>
+    token === 'secret'
+      ? { token, scopes: ['mcp'], subject: 'user-1' }
+      : token === 'noscope'
+        ? { token, scopes: [] }
+        : undefined,
+};
+
+/**
+ * OAuth behaviour every adapter must provide (MCP authorization spec):
+ * public metadata on the well-known paths, 401/403 challenges on the MCP endpoint,
+ * and a working tool call (with the token forwarded to the route) once authorized.
+ */
+export async function assertOAuthContract(base: string, getTool = 'get_user', mcpPath = '/mcp') {
+  const metadataUrl = 'https://mcp.example.com/.well-known/oauth-protected-resource/mcp';
+  for (const path of ['/.well-known/oauth-protected-resource/mcp', '/.well-known/oauth-protected-resource']) {
+    const res = await fetch(base + path);
+    expect(res.status, path).toBe(200);
+    expect(res.headers.get('access-control-allow-origin')).toBe('*');
+    expect(await res.json()).toMatchObject({
+      resource: OAUTH.resource,
+      authorization_servers: OAUTH.authorizationServers,
+      scopes_supported: ['mcp'],
+      bearer_methods_supported: ['header'],
+      resource_name: 'Test API',
+    });
+    const preflight = await fetch(base + path, { method: 'OPTIONS' });
+    expect(preflight.status, `OPTIONS ${path}`).toBe(204);
+  }
+
+  const mcpUrl = base + mcpPath;
+  const anon = await fetch(mcpUrl, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
+  });
+  expect(anon.status).toBe(401);
+  expect(anon.headers.get('www-authenticate')).toBe(`Bearer scope="mcp", resource_metadata="${metadataUrl}"`);
+
+  const bad = await rpc(mcpUrl, 'tools/list', {}, { authorization: 'Bearer forged' });
+  expect(bad.status).toBe(401);
+  expect(bad.body.error).toBe('invalid_token');
+
+  const noScope = await fetch(mcpUrl, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: 'Bearer noscope' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
+  });
+  expect(noScope.status).toBe(403);
+  expect(noScope.headers.get('www-authenticate')).toContain('error="insufficient_scope"');
+
+  const list = await rpc(mcpUrl, 'tools/list', {}, { authorization: TOKEN });
+  expect(list.status).toBe(200);
+  expect(list.body.result.tools.map((t: { name: string }) => t.name)).toContain(getTool);
+
+  // The verified token is forwarded, so the route's own auth still applies.
+  const user = await callTool(mcpUrl, getTool, { id: '7' }, { authorization: TOKEN });
+  expect(user.isError).toBeFalsy();
+  expect(user.structuredContent).toMatchObject({ id: '7', name: 'User 7' });
+}

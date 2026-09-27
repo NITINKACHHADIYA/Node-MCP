@@ -65,7 +65,15 @@ export function createKoaMcp(options: KoaMcpOptions): { server: McpServer; middl
     for (const r of options.routes ?? []) server.addTool(createRouteTool(r, r, dispatch, options));
   });
 
+  const metadataPaths = server.oauthMetadataPaths;
   const middleware: KoaMiddleware = async (ctx, next) => {
+    if (metadataPaths.includes(ctx.path)) {
+      const out = await server.handleMetadataHttp({ method: ctx.method });
+      ctx.status = out.status;
+      ctx.set(out.headers);
+      if (out.body !== undefined) ctx.body = out.body;
+      return;
+    }
     if (ctx.path !== path) return next();
     const body = ctx.request.body ?? (ctx.method === 'POST' ? await readRawBody(ctx.req) : undefined);
     const toolCtx: ToolContext = { headers: normalizeHeaders(ctx.req.headers), clientIp: ctx.ip, raw: ctx.req };

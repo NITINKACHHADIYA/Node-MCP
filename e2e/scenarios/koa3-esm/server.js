@@ -2,6 +2,7 @@ import Koa from 'koa';
 import Router from '@koa/router';
 import { bodyParser } from '@koa/bodyparser';
 import { koaMcp, mcpTool } from 'mcp-expose/koa';
+import { jwtVerifier } from 'mcp-expose/oauth';
 
 const app = new Koa();
 const router = new Router({ prefix: '/v1' });
@@ -73,8 +74,23 @@ router.get('/admin/stats', auth, (ctx) => {
   ctx.body = { orders: orders.size };
 }); // not exposed
 
+// OAuth mode: e2e/run.mjs runs every scenario a second time with MCP_OAUTH_RESOURCE set.
+// `e2e-token` stays valid (the routes' own auth expects it); other tokens must be JWTs signed by the test issuer.
+const oauthResource = process.env.MCP_OAUTH_RESOURCE;
+const verifyJwt = oauthResource
+  ? jwtVerifier({ issuer: 'https://auth.e2e.test', jwks: JSON.parse(process.env.MCP_OAUTH_JWKS) })
+  : undefined;
+const oauth = oauthResource
+  ? {
+      resource: oauthResource,
+      authorizationServers: ['https://auth.e2e.test'],
+      requiredScopes: ['mcp'],
+      verifyToken: (token, ctx) => (token === 'e2e-token' ? { token, scopes: ['mcp'] } : verifyJwt(token, ctx)),
+    }
+  : undefined;
+
 app.use(bodyParser());
-app.use(koaMcp({ name: 'shop-api', path: '/agents/mcp', routers: [router] }));
+app.use(koaMcp({ name: 'shop-api', path: '/agents/mcp', routers: [router], oauth }));
 app.use(router.routes()).use(router.allowedMethods());
 
 app.listen(Number(process.env.PORT), '127.0.0.1', () => console.log('READY'));

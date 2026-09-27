@@ -83,5 +83,12 @@ export function mountMcp(app: HonoLike, options: HonoMcpOptions): McpServer {
     const out = await server.handleHttp({ method: c.req.method, headers, body }, ctx);
     return new Response(out.body ?? null, { status: out.status, headers: out.headers });
   });
+  // OAuth Protected Resource Metadata (public).
+  for (const p of server.oauthMetadataPaths) {
+    app.all(p, async (c) => {
+      const out = await server.handleMetadataHttp({ method: c.req.method });
+      return new Response(out.body ?? null, { status: out.status, headers: out.headers });
+    });
+  }
   return server;
 }
