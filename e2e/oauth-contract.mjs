@@ -18,6 +18,7 @@ import {
   UnauthorizedError,
 } from '@modelcontextprotocol/sdk/client/auth.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+import { generateKeyPair, SignJWT } from 'jose';
 
 function assert(cond, message, detail) {
   if (!cond)
@@ -170,5 +171,118 @@ export async function runOAuthContract(url) {
   });
 
   await client.close().catch(() => {});
+  return results;
+}
+
+/**
+ * Extra checks for a regular scenario started in OAuth mode (`oauth` option with a
+ * jwtVerifier for issuer https://auth.e2e.test). Tokens are signed with `signer`.
+ */
+export async function runOAuthModeChecks(url, signer) {
+  const results = [];
+  const check = async (name, fn) => {
+    try {
+      await fn();
+      results.push({ name: `oauth: ${name}`, ok: true });
+    } catch (e) {
+      results.push({ name: `oauth: ${name}`, ok: false, error: e.message });
+    }
+  };
+  const { origin, pathname } = new URL(url);
+  const metadataUrl = `${origin}/.well-known/oauth-protected-resource${pathname}`;
+  const jwt = (claims = {}, { aud = url, iss = signer.issuer, exp = '5m', key = signer.privateKey } = {}) =>
+    new SignJWT({ scope: 'mcp', ...claims })
+      .setProtectedHeader({ alg: 'RS256', kid: signer.kid })
+      .setIssuer(iss)
+      .setAudience(aud)
+      .setSubject('user-1')
+      .setIssuedAt()
+      .setExpirationTime(exp)
+      .sign(key);
+  const post = (headers = {}, target = url) =>
+    fetch(target, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream', ...headers },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
+    });
+  const challenge = (res) => res.headers.get('www-authenticate') ?? '';
+
+  await check('metadata served on both well-known paths (public, CORS)', async () => {
+    for (const path of [metadataUrl, `${origin}/.well-known/oauth-protected-resource`]) {
+      const res = await fetch(path);
+      assert(res.status === 200, `GET ${path}`, res.status);
+      assert(res.headers.get('access-control-allow-origin') === '*', 'missing CORS header');
+      const body = await res.json();
+      assert(body.resource === url && body.authorization_servers?.[0] === signer.issuer, 'bad metadata', body);
+      assert(JSON.stringify(body.scopes_supported) === '["mcp"]', 'bad scopes_supported', body);
+      const pre = await fetch(path, { method: 'OPTIONS' });
+      assert(pre.status === 204 || pre.status === 200, `OPTIONS ${path}`, pre.status);
+    }
+  });
+
+  await check('SDK discovers the metadata', async () => {
+    const prm = await discoverOAuthProtectedResourceMetadata(url);
+    assert(prm.resource === url, 'resource mismatch', prm);
+  });
+
+  await check('no token: 401 challenge (POST and GET)', async () => {
+    const res = await post();
+    assert(res.status === 401, 'expected 401', res.status);
+    assert(extractResourceMetadataUrl(res)?.href === metadataUrl, 'bad resource_metadata', challenge(res));
+    assert(challenge(res).includes('scope="mcp"'), 'challenge should name the required scope', challenge(res));
+    const get = await fetch(url);
+    assert(get.status === 401, 'GET should be challenged too', get.status);
+  });
+
+  await check('rejects forged, foreign, expired and misplaced tokens', async () => {
+    const other = await generateKeyPair('RS256');
+    const cases = {
+      'wrong audience (token passthrough)': await jwt({}, { aud: 'https://other-api.example.com/mcp' }),
+      'wrong issuer': await jwt({}, { iss: 'https://evil.example' }),
+      'unknown signing key': await jwt({}, { key: other.privateKey }),
+      expired: await jwt({}, { exp: Math.floor(Date.now() / 1000) - 120 }),
+      garbage: 'not-a-jwt',
+    };
+    for (const [label, token] of Object.entries(cases)) {
+      const res = await post({ authorization: `Bearer ${token}` });
+      assert(res.status === 401 && challenge(res).includes('invalid_token'), `${label}: expected 401 invalid_token`, [
+        res.status,
+        challenge(res),
+      ]);
+    }
+    const query = await post({}, `${url}?access_token=${await jwt()}`);
+    assert(query.status === 401, 'tokens in the query string must be ignored', query.status);
+  });
+
+  await check('valid token without the required scope: 403 insufficient_scope', async () => {
+    const res = await post({ authorization: `Bearer ${await jwt({ scope: 'profile' })}` });
+    assert(res.status === 403 && challenge(res).includes('insufficient_scope'), 'expected 403', [
+      res.status,
+      challenge(res),
+    ]);
+  });
+
+  await check('valid JWT: SDK client works and the token is forwarded to routes', async () => {
+    const client = new Client({ name: 'mcp-expose-e2e', version: '1.0.0' });
+    const token = await jwt();
+    await client.connect(
+      new StreamableHTTPClientTransport(new URL(url), {
+        requestInit: { headers: { authorization: `Bearer ${token}` } },
+      }),
+    );
+    try {
+      const tools = (await client.listTools()).tools.map((t) => t.name);
+      assert(tools.length === 5, 'expected 5 tools', tools);
+      // whoami is public and not rate-limited (the contract already used up search_products' limit).
+      const pub = await client.callTool({ name: 'whoami', arguments: {} });
+      assert(!pub.isError && pub.structuredContent?.tool === 'whoami', 'public tool failed', pub);
+      // The route's own auth only knows `e2e-token`, so it must see (and reject) the JWT: proof it was forwarded.
+      const guarded = await client.callTool({ name: 'get_order', arguments: { id: '1' } });
+      const text = guarded.content?.map((c) => c.text).join('') ?? '';
+      assert(guarded.isError && text.includes('401'), 'route should have received the JWT', guarded);
+    } finally {
+      await client.close().catch(() => {});
+    }
+  });
   return results;
 }

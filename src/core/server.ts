@@ -246,7 +246,10 @@ export class McpServer {
         const tool = this.tools.get(m.params?.name as string);
         const missing = missingScopes(ctx.auth, tool?.scopes);
         if (missing.length) {
-          const scope = [...new Set([...(oauth.requiredScopes ?? []), ...(tool?.scopes ?? [])])];
+          // Include the scopes already granted, so re-authorizing never drops access the user gave before.
+          const scope = [
+            ...new Set([...(ctx.auth?.scopes ?? []), ...(oauth.requiredScopes ?? []), ...(tool?.scopes ?? [])]),
+          ];
           return authError(
             deny(oauth, 403, 'insufficient_scope', `Tool "${tool!.name}" needs scope: ${missing.join(' ')}`, scope),
           );

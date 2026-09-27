@@ -17,6 +17,7 @@
   "dependencies": {
     "@adonisjs/core": "^7.5.0",
     "@vinejs/vine": "^4.4.0",
+    "jose": "^6.0.0",
     "reflect-metadata": "^0.2.2"
   },
   "devDependencies": {

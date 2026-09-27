@@ -1,6 +1,7 @@
 import express, { type NextFunction, type Request, type Response } from 'express';
 import { mcpTool, mountMcp } from 'mcp-expose/express';
 import { z } from 'zod';
+import { jwtVerifier, type VerifyTokenContext } from 'mcp-expose/oauth';
 
 const app = express();
 app.use(express.json());
@@ -58,7 +59,23 @@ shop.get('/whoami', mcpTool({ name: 'whoami', description: 'Debug' }), (req, res
 
 shop.get('/internal/metrics', (_req, res) => res.json({ ok: true })); // not exposed
 
+// OAuth mode: e2e/run.mjs runs every scenario a second time with MCP_OAUTH_RESOURCE set.
+// `e2e-token` stays valid (the routes' own auth expects it); other tokens must be JWTs signed by the test issuer.
+const oauthResource = process.env.MCP_OAUTH_RESOURCE;
+const verifyJwt = oauthResource
+  ? jwtVerifier({ issuer: 'https://auth.e2e.test', jwks: JSON.parse(process.env.MCP_OAUTH_JWKS!) })
+  : undefined;
+const oauth = oauthResource
+  ? {
+      resource: oauthResource,
+      authorizationServers: ['https://auth.e2e.test'],
+      requiredScopes: ['mcp'],
+      verifyToken: (token: string, ctx: VerifyTokenContext) =>
+        token === 'e2e-token' ? { token, scopes: ['mcp'] } : verifyJwt!(token, ctx),
+    }
+  : undefined;
+
 app.use('/shop', shop);
-mountMcp(app, { name: 'shop-api', routers: { '/shop': shop } });
+mountMcp(app, { name: 'shop-api', routers: { '/shop': shop }, oauth });
 
 app.listen(Number(process.env.PORT), '127.0.0.1', () => console.log('READY'));

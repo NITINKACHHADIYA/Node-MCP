@@ -592,7 +592,7 @@ That's it. The adapter:
 cancel(@Param('id') id: string) { ... }
 ```
 
-A token without `orders:write` gets `403 insufficient_scope` with the scopes it needs. MCP clients then ask
+A token without `orders:write` gets `403 insufficient_scope` naming the scopes it needs (plus the ones it already has, so the new token doesn't lose access). MCP clients then ask
 the user to approve the extra access and retry. All tool scopes are advertised in `scopes_supported`.
 `scopes` works on every marker (`mcpTool()`, `config.mcp`, `.mcp()`, `defineTool()`).
 
@@ -752,7 +752,7 @@ Contributions are welcome. See [Development](#development).
 ```bash
 npm install
 npm test            # vitest: core + all six adapters (real servers, real HTTP)
-npm run test:e2e    # pack → install into 18 fresh framework projects → official MCP SDK client
+npm run test:e2e    # pack → install into 19 fresh framework projects → official MCP SDK client (with and without OAuth)
 npm run typecheck
 npm run build       # ESM + CJS + .d.ts into dist/
 

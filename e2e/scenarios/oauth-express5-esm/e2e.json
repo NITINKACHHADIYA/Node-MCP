@@ -1,4 +1,4 @@
 {
-  "description": "OAuth 2.1: SDK client discovers the auth server, gets a token (client_credentials) and steps up scopes; JWTs checked with jwtVerifier",
+  "description": "OAuth 2.1: SDK client registers, signs in (code + PKCE, resource indicator), steps up scopes; JWTs checked with jwtVerifier",
   "contract": "oauth"
 }

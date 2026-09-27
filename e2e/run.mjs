@@ -19,7 +19,8 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runContract } from './contract.mjs';
-import { runOAuthContract } from './oauth-contract.mjs';
+import { exportJWK, generateKeyPair } from 'jose';
+import { runOAuthContract, runOAuthModeChecks } from './oauth-contract.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const scenariosDir = join(root, 'e2e', 'scenarios');
@@ -109,35 +110,53 @@ async function main() {
     }
   });
 
+  // Every scenario also runs in OAuth mode: the app gets MCP_OAUTH_RESOURCE / MCP_OAUTH_JWKS
+  // and enables the `oauth` option; the contract signs test JWTs with this key.
+  const { privateKey, publicKey } = await generateKeyPair('RS256');
+  const jwks = JSON.stringify({ keys: [{ ...(await exportJWK(publicKey)), kid: 'e2e', alg: 'RS256' }] });
+  const signer = { privateKey, kid: 'e2e', issuer: 'https://auth.e2e.test' };
+
   const summary = [];
   let port = 4100;
+  const runs = [];
   for (const name of scenarios) {
+    runs.push({ name, oauth: false });
+    if (configOf(name).contract !== 'oauth') runs.push({ name, oauth: true });
+  }
+  for (const run of runs) {
+    const { name } = run;
+    const label = run.oauth ? `${name} [oauth]` : name;
     const dir = join(work, name);
     const cfg = configOf(name);
-    console.log(`\n▸ ${name}${cfg.description ? ` — ${cfg.description}` : ''}`);
+    console.log(`\n▸ ${label}${cfg.description && !run.oauth ? ` — ${cfg.description}` : ''}`);
     if (setupErrors.has(name)) {
       console.log(`  ✗ setup: ${setupErrors.get(name)}`);
-      summary.push({ name, passed: 0, total: 1, failed: true });
+      summary.push({ name: label, passed: 0, total: 1, failed: true });
       continue;
     }
 
     const p = port++;
     const logs = [];
+    const url = `http://127.0.0.1:${p}${cfg.mcpPath ?? '/mcp'}`;
+    const env = { ...process.env, PORT: String(p) };
+    if (run.oauth) Object.assign(env, { MCP_OAUTH_RESOURCE: url, MCP_OAUTH_JWKS: jwks });
     // detached: own process group, so we can stop npm AND the node process it spawns.
     const child = spawn('npm', ['start', '--silent'], {
       cwd: dir,
-      env: { ...process.env, PORT: String(p) },
+      env,
       stdio: ['ignore', 'pipe', 'pipe'],
       detached: true,
     });
     child.stdout.on('data', (d) => logs.push(String(d)));
     child.stderr.on('data', (d) => logs.push(String(d)));
-    const url = `http://127.0.0.1:${p}${cfg.mcpPath ?? '/mcp'}`;
 
     let results;
     try {
       await waitForServer(url, child, logs);
-      results = cfg.contract === 'oauth' ? await runOAuthContract(url, cfg) : await runContract(url, cfg);
+      if (cfg.contract === 'oauth') results = await runOAuthContract(url, cfg);
+      else if (run.oauth) {
+        results = [...(await runContract(url, { ...cfg, oauth: true })), ...(await runOAuthModeChecks(url, signer))];
+      } else results = await runContract(url, cfg);
     } catch (e) {
       results = [{ name: 'start app', ok: false, error: e.message }];
     } finally {
@@ -151,13 +170,13 @@ async function main() {
 
     for (const r of results) console.log(`  ${r.ok ? '✓' : '✗'} ${r.name}${r.ok ? '' : `\n      ${r.error}`}`);
     const passed = results.filter((r) => r.ok).length;
-    summary.push({ name, passed, total: results.length, failed: passed !== results.length });
+    summary.push({ name: label, passed, total: results.length, failed: passed !== results.length });
     if (passed !== results.length && logs.length) console.log(`  app log tail:\n${logs.join('').slice(-1500)}`);
   }
 
   console.log(`\n══ summary (Node ${process.version}) ══`);
-  for (const s of summary) console.log(`${s.failed ? '✗' : '✓'} ${s.name.padEnd(28)} ${s.passed}/${s.total}`);
-  for (const n of skipped) console.log(`- ${n.padEnd(28)} skipped (needs Node >= ${configOf(n).minNode})`);
+  for (const s of summary) console.log(`${s.failed ? '✗' : '✓'} ${s.name.padEnd(36)} ${s.passed}/${s.total}`);
+  for (const n of skipped) console.log(`- ${n.padEnd(36)} skipped (needs Node >= ${configOf(n).minNode})`);
   const failed = summary.filter((s) => s.failed).length;
   console.log(failed ? `\n${failed} scenario(s) failed` : `\nall ${summary.length} scenarios passed`);
   if (!process.env.E2E_KEEP) rmSync(work, { recursive: true, force: true });

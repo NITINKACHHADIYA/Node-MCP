@@ -144,8 +144,11 @@ export async function authenticate(o: OAuthOptions, headers: Record<string, stri
     return deny(o, 401, 'invalid_token', 'The access token has expired');
   }
   const missing = missingScopes(auth, o.requiredScopes);
-  if (missing.length)
-    return deny(o, 403, 'insufficient_scope', `Missing scope: ${missing.join(' ')}`, o.requiredScopes);
+  if (missing.length) {
+    // Keep the scopes already granted in the challenge, so re-authorizing never drops access.
+    const scope = [...new Set([...(auth.scopes ?? []), ...(o.requiredScopes ?? [])])];
+    return deny(o, 403, 'insufficient_scope', `Missing scope: ${missing.join(' ')}`, scope);
+  }
   return { ok: true, auth: { ...auth, scopes: auth.scopes ?? [] } };
 }
 

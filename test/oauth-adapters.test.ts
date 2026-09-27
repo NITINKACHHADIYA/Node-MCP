@@ -30,7 +30,7 @@ import { fastifyMcp } from '../src/fastify/index.js';
 import { mcpTool as honoTool, mountMcp as mountHono } from '../src/hono/index.js';
 import { koaMcp, mcpTool as koaTool } from '../src/koa/index.js';
 import { McpModule, McpTool } from '../src/nestjs/index.js';
-import { assertOAuthContract, baseUrlOf, OAUTH, rpc, TOKEN } from './helpers.js';
+import { assertOAuthContract, baseUrlOf, callTool, OAUTH, rpc, TOKEN } from './helpers.js';
 
 const cleanups: (() => unknown)[] = [];
 afterEach(async () => {
@@ -126,6 +126,46 @@ describe('OAuth on every adapter', () => {
     await assertOAuthContract(await listen(server));
   });
 
+  it('hono without an HTTP server (edge runtimes)', async () => {
+    const app = new Hono();
+    app.get('/users/:id', honoTool({ name: 'get_user' }), (c) => c.json({ id: c.req.param('id'), name: 'x' }));
+    mountHono(app, { name: 'h', oauth: OAUTH });
+    const meta = await app.request('/.well-known/oauth-protected-resource/mcp');
+    expect((await meta.json()).resource).toBe(OAUTH.resource);
+    const anon = await app.request('/mcp', { method: 'POST', body: '{}' });
+    expect(anon.status).toBe(401);
+    const res = await app.request('/mcp', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: TOKEN },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: { name: 'get_user', arguments: { id: '2' } },
+      }),
+    });
+    expect((await res.json()).result.structuredContent).toEqual({ id: '2', name: 'x' });
+  });
+
+  it('fastify with @fastify/cors and a custom MCP path', async () => {
+    const { default: cors } = await import('@fastify/cors');
+    const app = Fastify();
+    await app.register(cors);
+    const oauth = { ...OAUTH, resource: 'https://mcp.example.com/agents/mcp' };
+    await app.register(fastifyMcp, { name: 'f', path: '/agents/mcp', oauth });
+    const base = await app.listen({ port: 0, host: '127.0.0.1' });
+    cleanups.push(() => app.close());
+    const meta = await fetch(`${base}/.well-known/oauth-protected-resource/agents/mcp`);
+    expect((await meta.json()).resource).toBe(oauth.resource);
+    const pre = await fetch(`${base}/.well-known/oauth-protected-resource/agents/mcp`, {
+      method: 'OPTIONS',
+      headers: { origin: 'https://inspector.example', 'access-control-request-method': 'GET' },
+    });
+    expect(pre.status).toBeLessThan(300);
+    const anon = await rpc(`${base}/agents/mcp`, 'tools/list');
+    expect(anon.status).toBe(401);
+  });
+
   it('adonisjs', async () => {
     const application = new AppFactory().create(new URL('./', import.meta.url));
     await application.init();
@@ -204,6 +244,46 @@ describe('OAuth on every adapter', () => {
         await app.listen(0, '127.0.0.1');
         const base = (await app.getUrl()).replace('[::1]', '127.0.0.1').replace('localhost', '127.0.0.1');
         await assertOAuthContract(base);
+      });
+    }
+
+    for (const platform of ['express', 'fastify'] as const) {
+      it(`${platform} platform with enableCors() and forRootAsync()`, async () => {
+        const CONFIG = 'OAUTH_CONFIG';
+        @Module({ providers: [{ provide: CONFIG, useValue: OAUTH }], exports: [CONFIG] })
+        class ConfigModule {}
+        @Module({
+          imports: [
+            McpModule.forRootAsync({
+              imports: [ConfigModule],
+              inject: [CONFIG],
+              useFactory: (oauth: typeof OAUTH) => ({ name: 'n', oauth }),
+            }),
+          ],
+          controllers: [UsersController],
+        })
+        class AsyncModule {}
+        app =
+          platform === 'fastify'
+            ? await NestFactory.create(AsyncModule, new FastifyAdapter(), { logger: false })
+            : await NestFactory.create(AsyncModule, { logger: false });
+        // CORS registers its own OPTIONS handling; it must not clash with the metadata routes.
+        app.enableCors();
+        await app.listen(0, '127.0.0.1');
+        const base = (await app.getUrl()).replace('[::1]', '127.0.0.1').replace('localhost', '127.0.0.1');
+        const res = await fetch(`${base}/.well-known/oauth-protected-resource/mcp`, {
+          headers: { origin: 'https://inspector.example' },
+        });
+        expect(res.status).toBe(200);
+        expect(res.headers.get('access-control-allow-origin')).toBeTruthy();
+        const pre = await fetch(`${base}/.well-known/oauth-protected-resource/mcp`, {
+          method: 'OPTIONS',
+          headers: { origin: 'https://inspector.example', 'access-control-request-method': 'GET' },
+        });
+        expect(pre.status).toBeLessThan(300);
+        expect((await rpc(`${base}/mcp`, 'tools/list')).status).toBe(401);
+        const user = await callTool(`${base}/mcp`, 'get_user', { id: '4' }, { authorization: TOKEN });
+        expect(user.structuredContent).toEqual({ id: '4', name: 'User 4' });
       });
     }
 

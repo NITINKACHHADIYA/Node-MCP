@@ -7,8 +7,9 @@
     "start": "node dist/server.js"
   },
   "dependencies": {
-    "hono": "^4.6.0",
     "@hono/node-server": "^1.13.0",
+    "hono": "^4.6.0",
+    "jose": "^6.0.0",
     "zod": "^4.1.0"
   },
   "devDependencies": {

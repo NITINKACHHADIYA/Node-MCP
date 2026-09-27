@@ -37,7 +37,7 @@ const text = (r) => r.content?.map((c) => c.text).join('\n') ?? '';
 /**
  * Runs all checks. Returns [{ name, ok, error? }]. Never throws.
  * @param {string} url MCP endpoint
- * @param {{ serverName?: string, rateLimit?: { tool: string, max: number } }} opts
+ * @param {{ serverName?: string, rateLimit?: { tool: string, max: number }, oauth?: boolean }} opts
  */
 export async function runContract(url, opts = {}) {
   const results = [];
@@ -54,7 +54,8 @@ export async function runContract(url, opts = {}) {
   let anon;
   await check('connect + initialize (official SDK client)', async () => {
     authed = await connect(url, { authorization: TOKEN });
-    anon = await connect(url);
+    // In OAuth mode an anonymous client can't even connect (checked in oauth-contract.mjs).
+    if (!opts.oauth) anon = await connect(url);
     const info = authed.getServerVersion();
     assert(info?.name === (opts.serverName ?? 'shop-api'), 'unexpected serverInfo', info);
     assert(authed.getServerCapabilities()?.tools, 'server does not advertise tools capability');
@@ -99,10 +100,11 @@ export async function runContract(url, opts = {}) {
     assert(Array.isArray(r.structuredContent?.items) && r.structuredContent.items.length > 0, 'expected items', r);
   });
 
-  await check("app's auth rejects calls without credentials (401)", async () => {
-    const r = await anon.callTool({ name: 'get_order', arguments: { id: '1' } });
-    assert(r.isError === true && text(r).includes('401'), 'expected 401 tool error', r);
-  });
+  if (!opts.oauth)
+    await check("app's auth rejects calls without credentials (401)", async () => {
+      const r = await anon.callTool({ name: 'get_order', arguments: { id: '1' } });
+      assert(r.isError === true && text(r).includes('401'), 'expected 401 tool error', r);
+    });
 
   await check('Authorization header is forwarded to the route', async () => {
     const r = await authed.callTool({ name: 'get_order', arguments: { id: '1' } });

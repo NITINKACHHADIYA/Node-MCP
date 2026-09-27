@@ -9,7 +9,7 @@ import {
   protectedResourceMetadataPaths,
   type OAuthOptions,
 } from '../src/index.js';
-import { introspectionVerifier, jwtVerifier } from '../src/oauth/index.js';
+import { discoverAuthorizationServer, introspectionVerifier, jwtVerifier } from '../src/oauth/index.js';
 import { baseUrlOf } from './helpers.js';
 
 const RESOURCE = 'https://api.example.com/mcp';
@@ -104,7 +104,8 @@ describe('oauth core', () => {
     const res = await post(server, call('cancel'), 'reader');
     expect(res.status).toBe(403);
     expect(res.headers['www-authenticate']).toContain('error="insufficient_scope"');
-    expect(res.headers['www-authenticate']).toContain('scope="orders:write"');
+    // Already-granted scopes are kept, so the new token doesn't lose access.
+    expect(res.headers['www-authenticate']).toContain('scope="orders:read orders:write"');
 
     const batch = await post(server, [call('whoami', 1), call('cancel', 2)], 'reader');
     expect(batch.status).toBe(403);
@@ -117,7 +118,8 @@ describe('oauth core', () => {
     const strict = new McpServer({ name: 't', oauth: oauth({ requiredScopes: ['orders:write'] }) });
     const res = await post(strict, { jsonrpc: '2.0', id: 1, method: 'tools/list' }, 'reader');
     expect(res.status).toBe(403);
-    expect(res.headers['www-authenticate']).toContain('scope="orders:write"');
+    // Already-granted scopes are kept, so the new token doesn't lose access.
+    expect(res.headers['www-authenticate']).toContain('scope="orders:read orders:write"');
     expect((await post(strict, { jsonrpc: '2.0', id: 1, method: 'tools/list' }, 'writer')).status).toBe(200);
   });
 
@@ -236,6 +238,33 @@ describe('jwtVerifier', () => {
   });
 });
 
+describe('authorization server discovery', () => {
+  it('finds metadata for issuers with a path (Keycloak realms, Entra tenants)', async () => {
+    let base = '';
+    const seen: string[] = [];
+    const server = createServer((req, res) => {
+      seen.push(req.url!);
+      // Keycloak serves OIDC discovery appended to the realm path only.
+      if (req.url === '/realms/demo/.well-known/openid-configuration') {
+        res.setHeader('content-type', 'application/json');
+        return res.end(JSON.stringify({ issuer: `${base}/realms/demo`, jwks_uri: `${base}/realms/demo/certs` }));
+      }
+      res.statusCode = 404;
+      res.end();
+    });
+    await new Promise<void>((r) => server.listen(0, '127.0.0.1', () => r()));
+    base = baseUrlOf(server);
+    try {
+      const meta = await discoverAuthorizationServer(`${base}/realms/demo`);
+      expect(meta.jwks_uri).toBe(`${base}/realms/demo/certs`);
+      expect(seen[0]).toBe('/.well-known/oauth-authorization-server/realms/demo');
+      await expect(discoverAuthorizationServer(`${base}/nowhere`)).rejects.toThrow(/could not load/);
+    } finally {
+      server.close();
+    }
+  });
+});
+
 describe('introspectionVerifier', () => {
   let as: Server;
   let issuer: string;
@@ -280,6 +309,21 @@ describe('introspectionVerifier', () => {
     expect(await verify('no_aud', ctx)).toBeTruthy();
     const strict = introspectionVerifier({ issuer, requireAudience: true });
     expect(await strict('no_aud', ctx)).toBeUndefined();
+  });
+
+  it('works end to end as the oauth verifier, exposing ctx.auth to tools', async () => {
+    const server = new McpServer({
+      name: 't',
+      oauth: {
+        resource: RESOURCE,
+        authorizationServers: [issuer],
+        verifyToken: introspectionVerifier({ issuer, clientId: 'rs', clientSecret: 's' }),
+      },
+    });
+    server.addTool(defineTool({ name: 'me', description: 'me', handler: (_a, c) => ({ sub: c.auth?.subject }) }));
+    const ok = await post(server, call('me'), 'good');
+    expect(JSON.parse(ok.body!).result.structuredContent).toEqual({ sub: 'u1' });
+    expect((await post(server, call('me'), 'revoked')).status).toBe(401);
   });
 
   it('caches positive results', async () => {

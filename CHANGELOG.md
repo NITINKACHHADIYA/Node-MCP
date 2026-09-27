@@ -17,8 +17,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - New `mcp-expose/oauth` entry point: `jwtVerifier()` (JWKS, via the optional `jose` peer dependency),
     `introspectionVerifier()` (RFC 7662) and `discoverAuthorizationServer()`.
 - NestJS: `decorators` option to add decorators (such as `Public()`) to the MCP controller.
-- E2E scenario where the official MCP SDK client registers dynamically, signs in with authorization code + PKCE
-  and a resource indicator, and steps up scopes.
+- E2E: every scenario (each supported framework major) also runs in OAuth mode with `jwtVerifier`, and a new
+  scenario has the official MCP SDK client register dynamically, sign in with authorization code + PKCE and a
+  resource indicator, and step up scopes.
 
 ## [1.0.0] - 2026-09-25
 

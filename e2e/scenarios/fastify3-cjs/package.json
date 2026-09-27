@@ -5,6 +5,7 @@
     "start": "node server.js"
   },
   "dependencies": {
-    "fastify": "^3.29.5"
+    "fastify": "^3.29.5",
+    "jose": "^6.0.0"
   }
 }
