@@ -1,6 +1,7 @@
 // An Express 5 API protected by OAuth, plus a tiny authorization server in the
 // same process (in real life: Auth0, Okta, Keycloak, Entra ID, ...).
 import express from 'express';
+import { rateLimit } from 'express-rate-limit';
 import { createHash, randomUUID } from 'node:crypto';
 import { exportJWK, generateKeyPair, jwtVerify, SignJWT, createLocalJWKSet } from 'jose';
 import { mcpTool, mountMcp } from 'mcp-expose/express';
@@ -97,17 +98,25 @@ async function requireJwt(req, res, next) {
 }
 
 const orders = { 1: { id: '1', sku: 'KB-01', quantity: 1, status: 'paid' } };
+const apiLimiter = rateLimit({ windowMs: 60_000, limit: 100, standardHeaders: true, legacyHeaders: false });
 
-app.get('/orders/:id', mcpTool({ name: 'get_order', description: 'Get an order' }), requireJwt, (req, res) => {
-  res.json({ ...(orders[req.params.id] ?? { error: 'not found' }), requestedBy: req.user.sub });
-});
+app.get(
+  '/orders/:id',
+  mcpTool({ name: 'get_order', description: 'Get an order' }),
+  apiLimiter,
+  requireJwt,
+  (req, res) => {
+    res.json({ ...(orders[req.params.id] ?? { error: 'not found' }), requestedBy: req.user.sub });
+  },
+);
 app.delete(
   '/orders/:id',
   mcpTool({ name: 'cancel_order', description: 'Cancel an order', scopes: ['orders:write'] }),
+  apiLimiter,
   requireJwt,
   (req, res) => res.json({ id: req.params.id, status: 'cancelled' }),
 );
-app.get('/admin/stats', requireJwt, (_req, res) => res.json({ orders: Object.keys(orders).length }));
+app.get('/admin/stats', apiLimiter, requireJwt, (_req, res) => res.json({ orders: Object.keys(orders).length }));
 
 mountMcp(app, {
   name: 'shop-api',
