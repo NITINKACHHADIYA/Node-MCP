@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-09-27
+
 ### Added
 
 - **OAuth 2.1 support** following the MCP authorization spec, on every adapter, enabled with the new `oauth` server option:
@@ -50,5 +52,6 @@ options, default tool naming) now follows Semantic Versioning.
 - Path parameters that are empty, `.` or `..` are rejected, so an agent cannot use them to reach routes
   that were never exposed as tools (for example `/orders/../admin`).
 
-[Unreleased]: https://github.com/NITINKACHHADIYA/Node-MCP/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/NITINKACHHADIYA/Node-MCP/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/NITINKACHHADIYA/Node-MCP/releases/tag/v1.1.0
 [1.0.0]: https://github.com/NITINKACHHADIYA/Node-MCP/releases/tag/v1.0.0
