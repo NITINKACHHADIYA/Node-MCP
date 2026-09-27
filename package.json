@@ -1,6 +1,6 @@
 {
   "name": "mcp-expose",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Turn the HTTP routes of your existing Node.js app (NestJS, Express, Fastify, Koa, Hono, AdonisJS) into MCP tools for AI agents, reusing your auth, validation and rate limits.",
   "keywords": [
     "mcp",
