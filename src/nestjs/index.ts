@@ -13,7 +13,7 @@ import {
   type DynamicModule,
   type Type,
 } from '@nestjs/common';
-import { ApplicationConfig, DiscoveryModule, DiscoveryService } from '@nestjs/core';
+import { ApplicationConfig, DiscoveryModule, DiscoveryService, HttpAdapterHost } from '@nestjs/core';
 import type { IncomingMessage } from 'node:http';
 import { createFetchDispatcher } from '../core/dispatch.js';
 import { loopbackBaseUrl, normalizeHeaders } from '../core/node.js';
@@ -65,6 +65,11 @@ export interface McpModuleOptions extends McpServerOptions {
   /** Guards for the MCP endpoint itself, e.g. `[JwtAuthGuard]`. Global guards apply too. */
   guards?: (Type<CanActivate> | CanActivate)[];
   /**
+   * Extra decorators for the MCP controller, e.g. `[Public()]` so a global auth
+   * guard lets MCP requests through when the `oauth` option checks them instead.
+   */
+  decorators?: ClassDecorator[];
+  /**
    * Base URL for internal calls. Defaults to loopback on the port the MCP
    * request arrived on.
    */
@@ -83,15 +88,22 @@ export interface McpModuleOptions extends McpServerOptions {
   classValidatorStorage?: ClassValidatorStorage;
 }
 
-export interface McpModuleAsyncOptions extends Pick<McpModuleOptions, 'path' | 'guards'> {
+export interface McpModuleAsyncOptions extends Pick<McpModuleOptions, 'path' | 'guards' | 'decorators'> {
   /** Modules that export the providers listed in `inject`. */
   imports?: NonNullable<DynamicModule['imports']>;
   /** Providers passed to `useFactory`. */
   inject?: (string | symbol | Function)[];
-  /** Returns the remaining options (everything except `path` and `guards`). */
-  useFactory: (
-    ...args: any[]
-  ) => Omit<McpModuleOptions, 'path' | 'guards'> | Promise<Omit<McpModuleOptions, 'path' | 'guards'>>;
+  /** Returns the remaining options (everything except `path`, `guards` and `decorators`). */
+  useFactory: (...args: any[]) => McpModuleFactoryOptions | Promise<McpModuleFactoryOptions>;
+}
+
+export type McpModuleFactoryOptions = Omit<McpModuleOptions, 'path' | 'guards' | 'decorators'>;
+
+interface HttpAdapterLike {
+  get(path: string, handler: (req: unknown, res: unknown) => unknown): unknown;
+  options(path: string, handler: (req: unknown, res: unknown) => unknown): unknown;
+  setHeader(res: unknown, name: string, value: string): unknown;
+  reply(res: unknown, body: unknown, status?: number): unknown;
 }
 
 interface ControllerWrapper {
@@ -107,6 +119,7 @@ export class McpService {
     private readonly discovery: DiscoveryService,
     private readonly appConfig: ApplicationConfig,
     private readonly options: McpModuleOptions,
+    private readonly adapterHost?: HttpAdapterHost,
   ) {
     this.server = new McpServer(options);
     for (const t of options.tools ?? []) this.server.addTool(t);
@@ -119,6 +132,25 @@ export class McpService {
         this.server.addTool(createRouteTool(t.route, t.options, dispatch, options));
       }
     });
+  }
+
+  /**
+   * Serve the OAuth Protected Resource Metadata at the root of the app, outside
+   * the global prefix and guards (it must be public). Runs before Nest registers
+   * its own routes.
+   */
+  onModuleInit(): void {
+    const adapter = this.adapterHost?.httpAdapter as HttpAdapterLike | undefined;
+    if (!adapter) return;
+    for (const path of this.server.oauthMetadataPaths) {
+      const handler = (method: string) => async (_req: unknown, res: unknown) => {
+        const out = await this.server.handleMetadataHttp({ method });
+        for (const [k, v] of Object.entries(out.headers)) adapter.setHeader(res, k, v);
+        adapter.reply(res, out.body, out.status);
+      };
+      adapter.get(path, handler('GET'));
+      adapter.options(path, handler('OPTIONS'));
+    }
   }
 
   private globalPrefix(): string {
@@ -252,6 +284,7 @@ Injectable()(McpService);
 Inject(DiscoveryService)(McpService, undefined as never, 0);
 Inject(ApplicationConfig)(McpService, undefined as never, 1);
 Inject(MCP_MODULE_OPTIONS)(McpService, undefined as never, 2);
+Inject(HttpAdapterHost)(McpService, undefined as never, 3);
 
 interface AnyReq {
   method: string;
@@ -272,7 +305,7 @@ interface AnyRes {
   end?(body?: unknown): unknown;
 }
 
-function createMcpController(options: Pick<McpModuleOptions, 'path' | 'guards'>): Type<unknown> {
+function createMcpController(options: Pick<McpModuleOptions, 'path' | 'guards' | 'decorators'>): Type<unknown> {
   class McpController {
     constructor(readonly mcp: McpService) {}
 
@@ -299,6 +332,7 @@ function createMcpController(options: Pick<McpModuleOptions, 'path' | 'guards'>)
   Req()(proto, 'handle', 0);
   Res()(proto, 'handle', 1);
   if (options.guards?.length) UseGuards(...options.guards)(McpController);
+  for (const decorate of options.decorators ?? []) decorate(McpController);
   return McpController;
 }
 

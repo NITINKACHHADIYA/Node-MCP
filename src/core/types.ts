@@ -1,3 +1,7 @@
+import type { AuthInfo, OAuthOptions } from './oauth.js';
+
+export type { AuthInfo, OAuthOptions, TokenVerifier, VerifyTokenContext } from './oauth.js';
+
 /**
  * Shared types for mcp-expose. Everything in `core` is runtime-agnostic
  * (no `node:*` imports) so it also works on Bun, Deno and edge runtimes.
@@ -47,6 +51,8 @@ export interface ToolContext {
   clientIp?: string;
   /** Framework-specific raw request object (Express req, Koa ctx, Hono context...). */
   raw?: unknown;
+  /** The verified access token, when the `oauth` option is enabled. */
+  auth?: AuthInfo;
 }
 
 /** A fully resolved MCP tool. */
@@ -57,6 +63,12 @@ export interface McpToolDefinition {
   inputSchema: JsonSchema;
   annotations?: ToolAnnotations;
   handler: (args: Record<string, unknown>, ctx: ToolContext) => Promise<ToolResult>;
+  /**
+   * OAuth scopes the access token needs to call this tool (only checked when the
+   * `oauth` option is enabled). Missing scopes answer HTTP 403 `insufficient_scope`,
+   * so the client can ask the user for more access.
+   */
+  scopes?: string[];
   /** Optional validator run before the handler (from Standard Schema inputs). */
   validate?: (args: unknown) => Promise<{ ok: true; value: unknown } | { ok: false; message: string }>;
 }
@@ -82,6 +94,8 @@ export interface RouteToolOptions {
   annotations?: ToolAnnotations;
   /** Extra static headers sent with the internal request. */
   headers?: Record<string, string>;
+  /** OAuth scopes needed to call this tool (when the `oauth` option is enabled). */
+  scopes?: string[];
 }
 
 /** HTTP route that backs a tool. `path` may use `:param` or `{param}` placeholders. */
@@ -136,4 +150,10 @@ export interface McpServerOptions {
   forwardHeaders?: string[];
   /** Max characters of an API response returned to the model. @default 100_000 */
   maxResponseChars?: number;
+  /**
+   * Protect the MCP endpoint with OAuth 2.1, as the MCP authorization spec
+   * describes. MCP clients (Claude, Cursor, VS Code, ...) then discover your
+   * authorization server and sign the user in by themselves.
+   */
+  oauth?: OAuthOptions;
 }

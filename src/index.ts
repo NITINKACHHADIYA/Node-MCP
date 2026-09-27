@@ -11,3 +11,9 @@ export type { FetchDispatcherOptions } from './core/dispatch.js';
 export { defineTool, toolsFromOpenApi, toToolResult } from './core/define.js';
 export type { DefineToolOptions, FromOpenApiOptions } from './core/define.js';
 export { toJsonSchema } from './core/schema.js';
+export {
+  bearerChallenge,
+  parseScopes,
+  protectedResourceMetadataPaths,
+  protectedResourceMetadataUrl,
+} from './core/oauth.js';

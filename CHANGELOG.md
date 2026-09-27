@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **OAuth 2.1 support** following the MCP authorization spec, on every adapter, enabled with the new `oauth` server option:
+  - Protected Resource Metadata (RFC 9728) served at `/.well-known/oauth-protected-resource[/<path>]`, public and CORS-enabled.
+  - `401` / `403` responses with `WWW-Authenticate` challenges (`resource_metadata`, `scope`, `invalid_token`,
+    `insufficient_scope`), so MCP clients discover the authorization server and sign the user in by themselves.
+  - Audience-checked token verification with `requiredScopes`; the verified token is available to tools as `ctx.auth`.
+  - Per-tool `scopes` with `403 insufficient_scope` step-up.
+  - New `mcp-expose/oauth` entry point: `jwtVerifier()` (JWKS, via the optional `jose` peer dependency),
+    `introspectionVerifier()` (RFC 7662) and `discoverAuthorizationServer()`.
+- NestJS: `decorators` option to add decorators (such as `Public()`) to the MCP controller.
+- E2E scenario where the official MCP SDK client registers dynamically, signs in with authorization code + PKCE
+  and a resource indicator, and steps up scopes.
+
 ## [1.0.0] - 2026-09-25
 
 First stable release. The public API (`mcp-expose` and `mcp-expose/<framework>` exports, tool and server

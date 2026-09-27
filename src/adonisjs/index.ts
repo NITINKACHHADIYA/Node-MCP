@@ -129,5 +129,17 @@ export function mountMcp(router: RouterLike, options: AdonisMcpOptions): McpServ
   }) as unknown as Route;
   route.as('mcp_expose.endpoint');
   options.configureRoute?.(route);
+
+  // OAuth Protected Resource Metadata: public, without `configureRoute` middleware.
+  server.oauthMetadataPaths.forEach((p, i) => {
+    router
+      .any(p, async (ctx: AdonisContext) => {
+        const out = await server.handleMetadataHttp({ method: ctx.request.method() });
+        ctx.response.status(out.status);
+        for (const [k, v] of Object.entries(out.headers)) ctx.response.header(k, v);
+        ctx.response.send(out.body ?? '');
+      })
+      .as(`mcp_expose.oauth_metadata_${i}`);
+  });
   return server;
 }

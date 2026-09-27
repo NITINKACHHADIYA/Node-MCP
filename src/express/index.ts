@@ -44,7 +44,8 @@ export interface ExpressMcpOptions extends McpServerOptions {
   tools?: McpToolDefinition[];
   /**
    * Middleware run before the MCP endpoint, e.g. your auth middleware, to
-   * protect tools/list as well as tools/call.
+   * protect tools/list as well as tools/call. (With the `oauth` option you
+   * don't need this: mcp-expose checks the token itself.)
    */
   middleware?: Middleware[];
 }
@@ -81,6 +82,16 @@ export function mountMcp(app: ExpressAppLike, options: ExpressMcpOptions): McpSe
       writeNodeResponse(res, out);
     })().catch(next);
   };
-  (app.all as (path: string, ...h: Middleware[]) => void).call(app, path, ...(options.middleware ?? []), handler);
+  const all = app.all as (path: string, ...h: Middleware[]) => void;
+  all.call(app, path, ...(options.middleware ?? []), handler);
+
+  // OAuth Protected Resource Metadata: public, never behind `middleware`.
+  const metadata: Middleware = (req, res, next) => {
+    server
+      .handleMetadataHttp({ method: req.method ?? 'GET' })
+      .then((out) => writeNodeResponse(res, out))
+      .catch(next);
+  };
+  for (const p of server.oauthMetadataPaths) all.call(app, p, metadata);
   return server;
 }

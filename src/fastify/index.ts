@@ -129,6 +129,23 @@ export const fastifyMcp: FastifyPluginCallback<FastifyMcpOptions> = (instance, o
       return reply.send(out.body);
     },
   });
+
+  // OAuth Protected Resource Metadata: public, without `routeOptions` hooks.
+  for (const url of server.oauthMetadataPaths) {
+    fastify.route({
+      method: ['GET', 'OPTIONS'],
+      url,
+      handler: async (
+        request: { method: string },
+        reply: { code(n: number): unknown; headers(h: Record<string, string>): unknown; send(b?: unknown): unknown },
+      ) => {
+        const out = await server.handleMetadataHttp({ method: request.method });
+        reply.code(out.status);
+        reply.headers(out.headers);
+        return reply.send(out.body);
+      },
+    });
+  }
   done();
 };
 

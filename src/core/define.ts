@@ -18,6 +18,8 @@ export interface DefineToolOptions {
   description: string;
   input?: SchemaLike;
   annotations?: ToolAnnotations;
+  /** OAuth scopes needed to call this tool (when the `oauth` option is enabled). */
+  scopes?: string[];
   /** Return a string, any JSON value, or a full ToolResult. */
   handler: (args: any, ctx: ToolContext) => unknown;
 }
@@ -30,6 +32,7 @@ export function defineTool(opts: DefineToolOptions): McpToolDefinition {
     description: opts.description,
     inputSchema: { type: 'object', ...(toJsonSchema(opts.input) ?? { properties: {} }) },
     annotations: opts.annotations,
+    scopes: opts.scopes,
     validate: toValidator(opts.input),
     async handler(args, ctx) {
       return toToolResult(await opts.handler(args, ctx));

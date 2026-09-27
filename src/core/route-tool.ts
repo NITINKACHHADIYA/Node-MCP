@@ -232,6 +232,7 @@ export function createRouteTool(
     description: opts.description ?? `${method} ${route.path}`,
     inputSchema: schema,
     annotations: { ...defaultAnnotations(method), ...opts.annotations },
+    scopes: opts.scopes,
     validate: toValidator(opts.input),
     async handler(args, ctx) {
       const missing = opts.input ? undefined : checkRequired(schema, args);

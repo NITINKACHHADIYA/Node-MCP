@@ -1,3 +1,4 @@
+import { authenticate, deny, missingScopes, protectedResourceMetadataPaths, validateOAuthOptions } from './oauth.js';
 import type { McpServerOptions, McpToolDefinition, ToolContext, ToolResult } from './types.js';
 
 export const SUPPORTED_PROTOCOL_VERSIONS = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'];
@@ -50,7 +51,9 @@ export class McpServer {
   private readonly tools = new Map<string, McpToolDefinition>();
   private loaders: (() => void | Promise<void>)[] = [];
 
-  constructor(readonly options: McpServerOptions) {}
+  constructor(readonly options: McpServerOptions) {
+    if (options.oauth) validateOAuthOptions(options.oauth);
+  }
 
   /** Register a tool. Throws on duplicate names. */
   addTool(tool: McpToolDefinition): this {
@@ -166,6 +169,48 @@ export class McpServer {
   }
 
   /**
+   * Paths on which adapters serve the OAuth Protected Resource Metadata
+   * (empty when `oauth` is not configured). They must be public: no auth middleware.
+   */
+  get oauthMetadataPaths(): string[] {
+    return this.options.oauth ? protectedResourceMetadataPaths(this.options.oauth.resource) : [];
+  }
+
+  /** The OAuth Protected Resource Metadata document (RFC 9728). */
+  async protectedResourceMetadata(): Promise<Record<string, unknown>> {
+    const o = this.options.oauth;
+    if (!o) throw new Error('mcp-expose: the oauth option is not configured');
+    await this.load();
+    const scopes = o.scopesSupported ?? [
+      ...new Set([...(o.requiredScopes ?? []), ...[...this.tools.values()].flatMap((t) => t.scopes ?? [])]),
+    ];
+    return {
+      resource: o.resource,
+      authorization_servers: o.authorizationServers,
+      ...(scopes.length ? { scopes_supported: scopes } : {}),
+      bearer_methods_supported: ['header'],
+      ...(o.resourceName ? { resource_name: o.resourceName } : {}),
+      ...(o.resourceDocumentation ? { resource_documentation: o.resourceDocumentation } : {}),
+      ...o.metadata,
+    };
+  }
+
+  /** HTTP handler for the metadata paths. Public and CORS-enabled so browser-based clients can read it. */
+  async handleMetadataHttp(req: Pick<McpHttpRequest, 'method'>): Promise<McpHttpResponse> {
+    const cors = { 'access-control-allow-origin': '*', 'access-control-allow-methods': 'GET, OPTIONS' };
+    const method = req.method.toUpperCase();
+    if (!this.options.oauth) return { status: 404, headers: {} };
+    if (method === 'OPTIONS') return { status: 204, headers: { ...cors, 'access-control-allow-headers': '*' } };
+    if (method !== 'GET' && method !== 'HEAD') return { status: 405, headers: { allow: 'GET, OPTIONS' } };
+    const body = JSON.stringify(await this.protectedResourceMetadata());
+    return {
+      status: 200,
+      headers: { ...cors, 'content-type': 'application/json', 'cache-control': 'public, max-age=3600' },
+      body: method === 'HEAD' ? undefined : body,
+    };
+  }
+
+  /**
    * Framework-neutral Streamable HTTP handler. Adapters convert their request
    * into McpHttpRequest, call this, and write the McpHttpResponse back.
    */
@@ -173,6 +218,12 @@ export class McpServer {
     const json = { 'content-type': 'application/json' };
     if (!this.isOriginAllowed(req.headers.origin)) {
       return { status: 403, headers: json, body: JSON.stringify(fail(null, INVALID_REQUEST, 'Origin not allowed')) };
+    }
+    const oauth = this.options.oauth;
+    if (oauth) {
+      const outcome = await authenticate(oauth, req.headers);
+      if (!outcome.ok) return authError(outcome);
+      ctx = { ...ctx, auth: outcome.auth };
     }
     if (req.method.toUpperCase() !== 'POST') {
       // Stateless server: no standalone SSE stream and no sessions to delete.
@@ -186,8 +237,32 @@ export class McpServer {
         return { status: 400, headers: json, body: JSON.stringify(fail(null, PARSE_ERROR, 'Parse error')) };
       }
     }
+    if (oauth) {
+      // Per-tool scopes: answer 403 so the client can ask the user for more access (step-up).
+      await this.load();
+      const calls = (Array.isArray(body) ? body : [body]) as Partial<JsonRpcRequest>[];
+      for (const m of calls) {
+        if (m?.method !== 'tools/call') continue;
+        const tool = this.tools.get(m.params?.name as string);
+        const missing = missingScopes(ctx.auth, tool?.scopes);
+        if (missing.length) {
+          const scope = [...new Set([...(oauth.requiredScopes ?? []), ...(tool?.scopes ?? [])])];
+          return authError(
+            deny(oauth, 403, 'insufficient_scope', `Tool "${tool!.name}" needs scope: ${missing.join(' ')}`, scope),
+          );
+        }
+      }
+    }
     const response = await this.handleMessage(body, ctx);
     if (response === null) return { status: 202, headers: {} };
     return { status: 200, headers: json, body: JSON.stringify(response) };
   }
+}
+
+function authError(o: { status: number; challenge: string; error: string; description: string }): McpHttpResponse {
+  return {
+    status: o.status,
+    headers: { 'content-type': 'application/json', 'www-authenticate': o.challenge },
+    body: JSON.stringify({ error: o.error, error_description: o.description }),
+  };
 }

@@ -19,6 +19,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runContract } from './contract.mjs';
+import { runOAuthContract } from './oauth-contract.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const scenariosDir = join(root, 'e2e', 'scenarios');
@@ -136,7 +137,7 @@ async function main() {
     let results;
     try {
       await waitForServer(url, child, logs);
-      results = await runContract(url, cfg);
+      results = cfg.contract === 'oauth' ? await runOAuthContract(url, cfg) : await runContract(url, cfg);
     } catch (e) {
       results = [{ name: 'start app', ok: false, error: e.message }];
     } finally {

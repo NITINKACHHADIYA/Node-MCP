@@ -17,7 +17,10 @@
     "hono",
     "adonisjs",
     "openapi",
-    "tools"
+    "tools",
+    "oauth",
+    "oauth2",
+    "authorization"
   ],
   "homepage": "https://github.com/NITINKACHHADIYA/Node-MCP#readme",
   "bugs": {
@@ -56,6 +59,9 @@
       ],
       "adonisjs": [
         "dist/adonisjs/index.d.ts"
+      ],
+      "oauth": [
+        "dist/oauth/index.d.ts"
       ]
     }
   },
@@ -116,6 +122,14 @@
       "import": "./dist/adonisjs/index.js",
       "require": "./dist/adonisjs/index.cjs"
     },
+    "./oauth": {
+      "types": {
+        "import": "./dist/oauth/index.d.ts",
+        "require": "./dist/oauth/index.d.cts"
+      },
+      "import": "./dist/oauth/index.js",
+      "require": "./dist/oauth/index.cjs"
+    },
     "./package.json": "./package.json"
   },
   "files": [
@@ -153,6 +167,7 @@
     "express": ">=3",
     "fastify": ">=3",
     "hono": ">=2",
+    "jose": ">=5",
     "koa": ">=1"
   },
   "peerDependenciesMeta": {
@@ -175,6 +190,9 @@
       "optional": true
     },
     "hono": {
+      "optional": true
+    },
+    "jose": {
       "optional": true
     },
     "koa": {
@@ -205,6 +223,7 @@
     "fastify": "^5.12.5",
     "globals": "^17.12.0",
     "hono": "^4.13.9",
+    "jose": "^6.2.12",
     "koa": "^3.2.1",
     "prettier": "^3.9.9",
     "publint": "^0.3.24",
