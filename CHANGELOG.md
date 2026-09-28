@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.1.2] - 2026-09-28
+
+### Documentation
+
+- README: the version compatibility section says what each framework version is verified for (including OAuth and
+  `transformResponse`), the `transformResponse` section names the marker for every framework, and `ctx.callRoute()`
+  documents each framework's path prefixes.
+
+### Tests
+
+- `transformResponse` with `ctx.callRoute()` is checked end to end on every supported framework version (NestJS 10-12,
+  Express 3-5, Fastify 3-5, Koa 1-3, Hono 2-4, AdonisJS 6-7, OpenAPI gateway), with and without OAuth.
+
 ## [1.1.1] - 2026-09-28
 
 ### Added
@@ -68,7 +81,8 @@ options, default tool naming) now follows Semantic Versioning.
 - Path parameters that are empty, `.` or `..` are rejected, so an agent cannot use them to reach routes
   that were never exposed as tools (for example `/orders/../admin`).
 
-[Unreleased]: https://github.com/NITINKACHHADIYA/Node-MCP/compare/v1.1.1...HEAD
+[Unreleased]: https://github.com/NITINKACHHADIYA/Node-MCP/compare/v1.1.2...HEAD
+[1.1.2]: https://github.com/NITINKACHHADIYA/Node-MCP/releases/tag/v1.1.2
 [1.1.1]: https://github.com/NITINKACHHADIYA/Node-MCP/releases/tag/v1.1.1
 [1.1.0]: https://github.com/NITINKACHHADIYA/Node-MCP/releases/tag/v1.1.0
 [1.0.0]: https://github.com/NITINKACHHADIYA/Node-MCP/releases/tag/v1.0.0
