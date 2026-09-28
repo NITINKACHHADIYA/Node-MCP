@@ -1,5 +1,8 @@
 import { createRouteTool } from './route-tool.js';
+import { toToolResult } from './result.js';
 import { toJsonSchema, toValidator } from './schema.js';
+
+export { toToolResult } from './result.js';
 import type {
   Dispatcher,
   JsonSchema,
@@ -9,7 +12,6 @@ import type {
   SchemaLike,
   ToolAnnotations,
   ToolContext,
-  ToolResult,
 } from './types.js';
 
 export interface DefineToolOptions {
@@ -40,17 +42,6 @@ export function defineTool(opts: DefineToolOptions): McpToolDefinition {
   };
 }
 
-export function toToolResult(value: unknown): ToolResult {
-  if (value && typeof value === 'object' && Array.isArray((value as ToolResult).content)) return value as ToolResult;
-  if (typeof value === 'string') return { content: [{ type: 'text', text: value }] };
-  const text = JSON.stringify(value ?? null);
-  const result: ToolResult = { content: [{ type: 'text', text }] };
-  if (value && typeof value === 'object' && !Array.isArray(value)) {
-    result.structuredContent = value as Record<string, unknown>;
-  }
-  return result;
-}
-
 interface OpenApiOperation {
   operationId?: string;
   summary?: string;
@@ -76,7 +67,7 @@ export interface FromOpenApiOptions {
 export function toolsFromOpenApi(
   doc: { paths?: Record<string, Record<string, OpenApiOperation>> },
   dispatch: Dispatcher,
-  opts: FromOpenApiOptions & Pick<McpServerOptions, 'forwardHeaders' | 'maxResponseChars'> = {},
+  opts: FromOpenApiOptions & Pick<McpServerOptions, 'forwardHeaders' | 'maxResponseChars' | 'transformResponse'> = {},
 ): McpToolDefinition[] {
   const include = opts.include ?? (({ operation }) => !!operation['x-mcp']);
   const methods = ['get', 'post', 'put', 'patch', 'delete'];

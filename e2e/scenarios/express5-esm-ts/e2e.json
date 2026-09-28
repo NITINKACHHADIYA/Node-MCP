@@ -1,1 +1,4 @@
-{ "description": "Express 5, TypeScript (strict, NodeNext ESM), zod schemas, router via `routers` option" }
+{
+  "description": "Express 5, TypeScript (strict, NodeNext ESM), zod schemas, router via `routers` option",
+  "transformHook": true
+}

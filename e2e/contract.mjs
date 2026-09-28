@@ -37,7 +37,7 @@ const text = (r) => r.content?.map((c) => c.text).join('\n') ?? '';
 /**
  * Runs all checks. Returns [{ name, ok, error? }]. Never throws.
  * @param {string} url MCP endpoint
- * @param {{ serverName?: string, rateLimit?: { tool: string, max: number }, oauth?: boolean }} opts
+ * @param {{ serverName?: string, rateLimit?: { tool: string, max: number }, oauth?: boolean, transformHook?: boolean }} opts
  */
 export async function runContract(url, opts = {}) {
   const results = [];
@@ -134,6 +134,17 @@ export async function runContract(url, opts = {}) {
     const r = await authed.callTool({ name: 'whoami', arguments: {} });
     assert(r.structuredContent?.tool === 'whoami', 'header not seen by app', r);
   });
+
+  if (opts.transformHook) {
+    await check('transformResponse enriches the response via callRoute', async () => {
+      const r = await authed.callTool({ name: 'whoami', arguments: {} });
+      assert(
+        r.structuredContent?.hooked === true && r.structuredContent?.productCount === 1,
+        'expected the hook to add hooked + productCount',
+        r,
+      );
+    });
+  }
 
   await check('unknown tool is a JSON-RPC error', async () => {
     let threw = false;

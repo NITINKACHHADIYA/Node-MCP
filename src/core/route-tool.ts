@@ -1,10 +1,14 @@
+import { isToolResult, toToolResult } from './result.js';
 import { checkRequired, toJsonSchema, toValidator } from './schema.js';
 import type {
   Dispatcher,
   JsonSchema,
   McpServerOptions,
   McpToolDefinition,
+  ResponseTransformContext,
+  RouteRequest,
   RouteResponse,
+  RouteToolResponse,
   RouteSpec,
   RouteToolOptions,
   ToolAnnotations,
@@ -180,8 +184,7 @@ function splitArgs(args: Record<string, unknown>, mapping: ArgMapping) {
 }
 
 export function responseToResult(res: RouteResponse, maxChars: number): ToolResult {
-  let text = res.body;
-  if (text.length > maxChars) text = `${text.slice(0, maxChars)}\n…[truncated ${text.length - maxChars} chars]`;
+  const text = truncate(res.body, maxChars);
   const isError = res.status >= 400;
   const result: ToolResult = {
     content: [{ type: 'text', text: isError ? `HTTP ${res.status}\n${text}` : text || `HTTP ${res.status}` }],
@@ -201,6 +204,55 @@ export function responseToResult(res: RouteResponse, maxChars: number): ToolResu
   return result;
 }
 
+function safeDecode(segment: string): string {
+  try {
+    return decodeURIComponent(segment);
+  } catch {
+    return segment;
+  }
+}
+
+function truncate(text: string, maxChars: number): string {
+  return text.length > maxChars ? `${text.slice(0, maxChars)}\n…[truncated ${text.length - maxChars} chars]` : text;
+}
+
+/** Add the parsed JSON body (when the response is JSON) and an `ok` flag. */
+export function toRouteToolResponse(res: RouteResponse): RouteToolResponse {
+  let json: unknown;
+  if ((res.headers['content-type'] ?? '').includes('json') && res.body) {
+    try {
+      json = JSON.parse(res.body);
+    } catch {
+      /* not JSON after all */
+    }
+  }
+  return { ...res, json, ok: res.status < 400 };
+}
+
+/**
+ * Turn what a `transformResponse` hook returned into the tool result. Plain values
+ * keep the route's error status; ToolResults are used as they are. Text is capped
+ * at `maxChars` either way.
+ */
+function transformedResult(value: unknown, res: RouteToolResponse, maxChars: number): ToolResult {
+  const explicit = isToolResult(value);
+  const result = toToolResult(value);
+  if (!explicit && !res.ok) {
+    result.isError = true;
+    delete result.structuredContent;
+  }
+  let truncated = false;
+  const content = result.content.map((c) => {
+    if (c.type !== 'text' || c.text.length <= maxChars) return c;
+    truncated = true;
+    return { ...c, text: truncate(c.text, maxChars) };
+  });
+  if (!truncated) return result;
+  // The text no longer matches the structured data, so only keep the text.
+  const { structuredContent: _dropped, ...rest } = result;
+  return { ...rest, content };
+}
+
 export function pickForwardHeaders(ctx: ToolContext, names: string[]): Record<string, string> {
   const out: Record<string, string> = {};
   for (const name of names) {
@@ -218,13 +270,14 @@ export function createRouteTool(
   route: RouteSpec,
   opts: RouteToolOptions,
   dispatch: Dispatcher,
-  serverOpts: Pick<McpServerOptions, 'forwardHeaders' | 'maxResponseChars'> = {},
+  serverOpts: Pick<McpServerOptions, 'forwardHeaders' | 'maxResponseChars' | 'transformResponse'> = {},
 ): McpToolDefinition {
   const method = route.method.toUpperCase();
   const name = sanitizeToolName(opts.name ?? toolNameFromRoute(method, route.path));
   const { schema, mapping } = buildInputSchema(route, opts);
   const forward = serverOpts.forwardHeaders ?? DEFAULT_FORWARD_HEADERS;
   const maxChars = serverOpts.maxResponseChars ?? 100_000;
+  const transform = opts.transformResponse ?? serverOpts.transformResponse;
 
   return {
     name,
@@ -254,8 +307,43 @@ export function createRouteTool(
       } catch (err) {
         return { isError: true, content: [{ type: 'text', text: (err as Error).message }] };
       }
-      const res = await dispatch({ method, path, query, body, headers }, ctx);
-      return responseToResult(res, maxChars);
+      const request: RouteRequest = { method, path, query, body, headers };
+      const res = await dispatch(request, ctx);
+      if (!transform) return responseToResult(res, maxChars);
+
+      const { 'content-type': _ct, ...baseHeaders } = headers;
+      const hookCtx: ResponseTransformContext = {
+        tool: name,
+        args,
+        request,
+        toolContext: ctx,
+        defaultResult: () => responseToResult(res, maxChars),
+        async callRoute(r) {
+          if (!r.path.startsWith('/')) {
+            throw new Error(`callRoute: path must start with "/", got ${JSON.stringify(r.path)}`);
+          }
+          // Placeholders are encoded like tool arguments; dot segments are never allowed.
+          const params = r.params ?? {};
+          const missing = pathParams(r.path).filter((p) => params[p] === undefined && !r.path.includes(`:${p}?`));
+          if (missing.length) throw new Error(`callRoute: missing params for ${r.path}: ${missing.join(', ')}`);
+          const subPath = interpolatePath(r.path, params);
+          if (subPath.split('/').some((seg) => ['.', '..'].includes(safeDecode(seg)))) {
+            throw new Error(`callRoute: path must not contain "." or ".." segments: ${JSON.stringify(subPath)}`);
+          }
+          const sub: RouteRequest = {
+            method: (r.method ?? 'GET').toUpperCase(),
+            path: subPath,
+            query: r.query ?? {},
+            body: r.body,
+            headers: { ...baseHeaders, ...r.headers },
+          };
+          if (sub.body !== undefined) sub.headers['content-type'] = 'application/json';
+          return toRouteToolResponse(await dispatch(sub, ctx));
+        },
+      };
+      const response = toRouteToolResponse(res);
+      const value = await transform(response, hookCtx);
+      return value === undefined ? responseToResult(res, maxChars) : transformedResult(value, response, maxChars);
     },
   };
 }

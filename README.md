@@ -47,13 +47,14 @@ router.get('/orders/:id', [OrdersController, 'show']).use(middleware.auth()).mcp
 6. [Connect an AI client](#connect-an-ai-client)
 7. [OAuth: sign in from AI clients](#oauth-sign-in-from-ai-clients)
 8. [Defining tool inputs (schemas)](#defining-tool-inputs-schemas)
-9. [Configuration reference](#configuration-reference)
-10. [Custom (non-HTTP) tools](#custom-non-http-tools)
-11. [Security checklist](#security-checklist)
-12. [Writing tools agents use well](#writing-tools-agents-use-well)
-13. [Limitations and roadmap](#limitations-and-roadmap)
-14. [Development](#development)
-15. [Versioning and support](#versioning-and-support)
+9. [Shaping and enriching responses](#shaping-and-enriching-responses)
+10. [Configuration reference](#configuration-reference)
+11. [Custom (non-HTTP) tools](#custom-non-http-tools)
+12. [Security checklist](#security-checklist)
+13. [Writing tools agents use well](#writing-tools-agents-use-well)
+14. [Limitations and roadmap](#limitations-and-roadmap)
+15. [Development](#development)
+16. [Versioning and support](#versioning-and-support)
 
 ---
 
@@ -648,30 +649,88 @@ Sources, from highest to lowest precedence:
 
 Your app's own validation always runs as well. The schema tells the agent what to send, and your API decides what it accepts.
 
+## Shaping and enriching responses
+
+By default the agent gets the route's response as it is. Add `transformResponse` to a route tool to change
+what the agent sees: hide internal fields, format values, add hints, or pull in related data from other
+routes. The route stays a route tool; there is no need to rewrite it as a custom tool.
+
+```ts
+@Get(':id')
+@McpTool({
+  name: 'get_order',
+  transformResponse: async (res, ctx) => {
+    if (!res.ok) return undefined; // keep the default error result
+    const { internalNotes, ...order } = res.json as Order;
+    // Another route of this app, with the same user's credentials, guards and pipes:
+    const customer = await ctx.callRoute({ path: '/api/customers/:id', params: { id: order.customerId } });
+    return { ...order, total: formatMoney(order.total), customer: customer.ok ? customer.json : null };
+  },
+})
+findOne(@Param('id') id: string) { ... }
+```
+
+It works the same with every marker: `mcpTool({ transformResponse })`, `config: { mcp: { transformResponse } }`,
+`.mcp({ transformResponse })`, and `toolsFromOpenApi(doc, dispatch, { transformResponse })`.
+
+**What the hook receives**
+
+- `res`: `status`, `headers`, the raw `body`, the parsed `json` (for JSON responses) and `ok` (status below 400).
+- `ctx.args`: the tool arguments. `ctx.request`: the internal request (method, path, query, body).
+- `ctx.toolContext`: the MCP request's headers, client IP and, with [OAuth](#oauth-sign-in-from-ai-clients), `auth`.
+- `ctx.defaultResult()`: the result mcp-expose would return without the hook.
+- `ctx.callRoute({ method, path, params, query, body, headers })`: calls another route of the same app.
+  - It forwards the same credentials (`Authorization`, cookies) and runs through the same middleware, guards and validation.
+  - `path` is the full path as your server sees it, including any global prefix or router mount path. Fill `:id` / `{id}`
+    placeholders from `params`: values are URL-encoded, and `.` or `..` are rejected, so agent input can't redirect the call.
+
+**What it returns**
+
+| Return value               | Result                                                                                              |
+| -------------------------- | --------------------------------------------------------------------------------------------------- |
+| a string or any JSON value | Sent to the agent (objects also as `structuredContent`). Still an error result if the route failed. |
+| a full `ToolResult`        | Used as is, so you control `isError` (e.g. `{ ...ctx.defaultResult(), content: [...] }`).           |
+| `undefined`                | The default result.                                                                                 |
+| a thrown error             | An error result with the message, which the agent sees.                                             |
+
+`maxResponseChars` still applies to whatever the hook returns.
+
+**For every tool at once**, set `transformResponse` in the server options, e.g. to strip fields everywhere:
+
+```ts
+mountMcp(app, {
+  name: 'shop-api',
+  transformResponse: (res) => (res.ok ? omitDeep(res.json, ['internalNotes', 'passwordHash']) : undefined),
+});
+```
+
+A tool's own `transformResponse` replaces the server-level one.
+
 ## Configuration reference
 
 ### Server options (all adapters)
 
-| Option             | Type                  | Default                                                    | Description                                                                                                                        |
-| ------------------ | --------------------- | ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `name`             | `string`              | required                                                   | Server name shown to clients.                                                                                                      |
-| `version`          | `string`              | `'1.0.0'`                                                  | Server version.                                                                                                                    |
-| `instructions`     | `string`              | none                                                       | Guidance for the model on how to use the tools together.                                                                           |
-| `path`             | `string`              | `'/mcp'`                                                   | Endpoint path.                                                                                                                     |
-| `allowedOrigins`   | `string[] \| '*'`     | `[]`                                                       | Browser origins allowed to call the endpoint. Requests without `Origin` (CLIs, IDEs, servers) are always allowed.                  |
-| `forwardHeaders`   | `string[]`            | `['authorization','cookie','x-api-key','accept-language']` | Headers copied from the MCP request to the internal API call.                                                                      |
-| `maxResponseChars` | `number`              | `100000`                                                   | Longer API responses are truncated before reaching the model.                                                                      |
-| `oauth`            | `OAuthOptions`        | none                                                       | Protect the endpoint with OAuth 2.1. See [OAuth](#oauth-sign-in-from-ai-clients).                                                  |
-| `tools`            | `McpToolDefinition[]` | `[]`                                                       | Extra hand-written tools.                                                                                                          |
-| `baseUrl`          | `string`              | loopback                                                   | _Express/Koa/Nest/Adonis._ Where internal calls go. Set it for HTTPS with self-signed certs, unix sockets, or a separate API host. |
-| `routes`           | `{method,path,...}[]` | `[]`                                                       | _Express/Koa/Hono._ Expose routes without editing them.                                                                            |
-| `routers`          | see guide             | none                                                       | _Express:_ `{ '/prefix': router }`. _Koa:_ `[router]`.                                                                             |
-| `middleware`       | `Middleware[]`        | `[]`                                                       | _Express._ Middleware in front of `/mcp`, such as auth.                                                                            |
-| `guards`           | `CanActivate[]`       | `[]`                                                       | _NestJS._ Guards on the MCP controller.                                                                                            |
-| `decorators`       | `ClassDecorator[]`    | `[]`                                                       | _NestJS._ Extra decorators on the MCP controller, e.g. `[Public()]` for global guards.                                             |
-| `pathPrefix`       | `string`              | none                                                       | _NestJS._ Extra prefix for tool routes. Global prefix and URI versioning are automatic.                                            |
-| `routeOptions`     | `object`              | none                                                       | _Fastify._ Extra route options for `/mcp`, such as `onRequest` hooks.                                                              |
-| `configureRoute`   | `(route) => void`     | none                                                       | _AdonisJS._ Configure the MCP route, e.g. add middleware.                                                                          |
+| Option              | Type                  | Default                                                    | Description                                                                                                                        |
+| ------------------- | --------------------- | ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `name`              | `string`              | required                                                   | Server name shown to clients.                                                                                                      |
+| `version`           | `string`              | `'1.0.0'`                                                  | Server version.                                                                                                                    |
+| `instructions`      | `string`              | none                                                       | Guidance for the model on how to use the tools together.                                                                           |
+| `path`              | `string`              | `'/mcp'`                                                   | Endpoint path.                                                                                                                     |
+| `allowedOrigins`    | `string[] \| '*'`     | `[]`                                                       | Browser origins allowed to call the endpoint. Requests without `Origin` (CLIs, IDEs, servers) are always allowed.                  |
+| `forwardHeaders`    | `string[]`            | `['authorization','cookie','x-api-key','accept-language']` | Headers copied from the MCP request to the internal API call.                                                                      |
+| `maxResponseChars`  | `number`              | `100000`                                                   | Longer API responses are truncated before reaching the model.                                                                      |
+| `oauth`             | `OAuthOptions`        | none                                                       | Protect the endpoint with OAuth 2.1. See [OAuth](#oauth-sign-in-from-ai-clients).                                                  |
+| `transformResponse` | `ResponseTransform`   | none                                                       | Default response hook for route tools without their own. See [Shaping responses](#shaping-and-enriching-responses).                |
+| `tools`             | `McpToolDefinition[]` | `[]`                                                       | Extra hand-written tools.                                                                                                          |
+| `baseUrl`           | `string`              | loopback                                                   | _Express/Koa/Nest/Adonis._ Where internal calls go. Set it for HTTPS with self-signed certs, unix sockets, or a separate API host. |
+| `routes`            | `{method,path,...}[]` | `[]`                                                       | _Express/Koa/Hono._ Expose routes without editing them.                                                                            |
+| `routers`           | see guide             | none                                                       | _Express:_ `{ '/prefix': router }`. _Koa:_ `[router]`.                                                                             |
+| `middleware`        | `Middleware[]`        | `[]`                                                       | _Express._ Middleware in front of `/mcp`, such as auth.                                                                            |
+| `guards`            | `CanActivate[]`       | `[]`                                                       | _NestJS._ Guards on the MCP controller.                                                                                            |
+| `decorators`        | `ClassDecorator[]`    | `[]`                                                       | _NestJS._ Extra decorators on the MCP controller, e.g. `[Public()]` for global guards.                                             |
+| `pathPrefix`        | `string`              | none                                                       | _NestJS._ Extra prefix for tool routes. Global prefix and URI versioning are automatic.                                            |
+| `routeOptions`      | `object`              | none                                                       | _Fastify._ Extra route options for `/mcp`, such as `onRequest` hooks.                                                              |
+| `configureRoute`    | `(route) => void`     | none                                                       | _AdonisJS._ Configure the MCP route, e.g. add middleware.                                                                          |
 
 ### Tool options (`@McpTool()`, `mcpTool()`, `config.mcp`, `.mcp()`)
 
@@ -684,6 +743,7 @@ Your app's own validation always runs as well. The schema tells the agent what t
 | `annotations`                         | MCP hints: `readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`. Defaults come from the HTTP method (GET → read-only, DELETE → destructive).        |
 | `headers`                             | Static headers added to the internal request.                                                                                                                       |
 | `scopes`                              | OAuth scopes the token needs to call this tool (with the `oauth` option). Missing scopes answer `403 insufficient_scope`.                                           |
+| `transformResponse`                   | Shape or enrich what the agent sees from this route's response. See [Shaping and enriching responses](#shaping-and-enriching-responses).                            |
 
 Each internal request also carries `X-Mcp-Tool: <tool name>`, so you can log or meter agent traffic separately.
 
@@ -740,7 +800,7 @@ Planned (non-breaking, 1.x minor releases):
 
 - Per-user tool lists (hide tools the token's scopes can't call)
 - Next.js route handlers, Hapi and Elysia adapters
-- Structured output schemas, and binary/file responses
+- Structured output schemas (`outputSchema`), and binary/file responses
 - Streaming long-running responses over SSE
 - CLI to preview generated tools (`npx mcp-expose inspect`)
 - Resources from GET routes, and prompts
