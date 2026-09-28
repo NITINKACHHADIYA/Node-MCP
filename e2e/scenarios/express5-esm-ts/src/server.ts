@@ -1,4 +1,5 @@
 import express, { type NextFunction, type Request, type Response } from 'express';
+import { rateLimit } from 'express-rate-limit';
 import { mcpTool, mountMcp } from 'mcp-expose/express';
 import { z } from 'zod';
 import { jwtVerifier, type VerifyTokenContext } from 'mcp-expose/oauth';
@@ -10,6 +11,9 @@ const products = [{ id: '1', name: 'Keyboard', sku: 'KB-01' }];
 const orders = new Map([['1', { id: '1', sku: 'KB-01', quantity: 1, status: 'paid' }]]);
 
 const CreateOrder = z.object({ sku: z.string(), quantity: z.number().int().min(1).max(10) });
+
+// Rate-limit authenticated routes (also for agent traffic, which arrives through the same routes).
+const apiLimiter = rateLimit({ windowMs: 60_000, limit: 1000, standardHeaders: true, legacyHeaders: false });
 
 function auth(req: Request, res: Response, next: NextFunction) {
   if (req.headers.authorization !== 'Bearer e2e-token') {
@@ -30,7 +34,7 @@ shop.get(
   },
 );
 
-shop.get('/orders/:id', mcpTool({ name: 'get_order', description: 'Get an order' }), auth, (req, res) => {
+shop.get('/orders/:id', mcpTool({ name: 'get_order', description: 'Get an order' }), apiLimiter, auth, (req, res) => {
   const order = orders.get(req.params.id as string);
   if (!order) return void res.status(404).json({ error: 'Not found' });
   res.json(order);
@@ -39,6 +43,7 @@ shop.get('/orders/:id', mcpTool({ name: 'get_order', description: 'Get an order'
 shop.post(
   '/orders',
   mcpTool({ name: 'create_order', description: 'Create an order', body: CreateOrder }),
+  apiLimiter,
   auth,
   (req, res) => {
     const parsed = CreateOrder.safeParse(req.body);
@@ -49,9 +54,15 @@ shop.post(
   },
 );
 
-shop.delete('/orders/:id', mcpTool({ name: 'cancel_order', description: 'Cancel an order' }), auth, (req, res) => {
-  res.json({ id: req.params.id, status: 'cancelled' });
-});
+shop.delete(
+  '/orders/:id',
+  mcpTool({ name: 'cancel_order', description: 'Cancel an order' }),
+  apiLimiter,
+  auth,
+  (req, res) => {
+    res.json({ id: req.params.id, status: 'cancelled' });
+  },
+);
 
 shop.get('/whoami', mcpTool({ name: 'whoami', description: 'Debug' }), (req, res) => {
   res.json({ tool: req.headers['x-mcp-tool'] ?? null });
