@@ -1,1 +1,4 @@
-{ "description": "Fastify 4, CommonJS, route JSON schemas reused as tool schemas, preHandler auth" }
+{
+  "description": "Fastify 4, CommonJS, route JSON schemas reused as tool schemas, preHandler auth",
+  "transformHook": true
+}

@@ -125,7 +125,9 @@ Tools are discovered **lazily on the first MCP request**, so the order you regis
 
 mcp-expose supports the **current major version of each framework and the two before it**. Every row
 below runs in CI as a real project (see [`e2e/`](e2e/README.md)): the packed library is installed from its
-tarball and the app is driven by the official MCP SDK client, on Node.js 20, 22 and 24.
+tarball and the app is driven by the official MCP SDK client, on Node.js 20, 22 and 24. Each row is checked for tool
+discovery, auth forwarding, the app's own validation errors, [OAuth](#oauth-sign-in-from-ai-clients) and
+[`transformResponse`](#shaping-and-enriching-responses), with and without the `oauth` option.
 
 | Framework | Supported majors | Notes                                                                                |
 | --------- | ---------------- | ------------------------------------------------------------------------------------ |
@@ -197,7 +199,16 @@ export class CreateOrderDto {
 @UseGuards(JwtAuthGuard)                 // ← still enforced for every tool call
 export class OrdersController {
   @Get(':id')
-  @McpTool({ description: 'Get one order by its id.' })
+  @McpTool({
+    description: 'Get one order by its id.',
+    // Optional: shape what the agent sees. Hide internal fields, add the customer from another route.
+    transformResponse: async (res, ctx) => {
+      if (!res.ok) return undefined; // keep the default error result
+      const { internalNotes, ...order } = res.json as Order;
+      const customer = await ctx.callRoute({ path: '/api/customers/:id', params: { id: order.customerId } });
+      return { ...order, customer: customer.json };
+    },
+  })
   findOne(@Param('id', ParseIntPipe) id: number) { … }
 
   @Post()
@@ -271,6 +282,9 @@ app.get(
     name: 'search_products',
     description: 'Search the product catalog by name.',
     query: { type: 'object', properties: { q: { type: 'string' } } },
+    // Optional: only send the fields the agent needs
+    transformResponse: (res) =>
+      res.ok ? (res.json as { items: Product[] }).items.map(({ id, name, price }) => ({ id, name, price })) : undefined,
   }),
   searchProducts,
 );
@@ -335,7 +349,14 @@ app.post(
         required: ['title'],
       },
     },
-    config: { mcp: { name: 'add_todo', description: 'Add a todo item.' } }, // or `mcp: true`
+    config: {
+      mcp: {
+        name: 'add_todo',
+        description: 'Add a todo item.',
+        // Optional: shape the response the agent sees
+        transformResponse: (res) => (res.ok ? { created: true, id: (res.json as Todo).id } : undefined),
+      },
+    }, // or `mcp: true`
   },
   addTodo,
 );
@@ -357,7 +378,15 @@ const app = new Koa();
 const router = new Router({ prefix: '/api' });
 
 // Step 1: mark routes
-router.get('/weather/:city', mcpTool({ description: 'Current weather for a city.' }), getWeather);
+router.get(
+  '/weather/:city',
+  mcpTool({
+    description: 'Current weather for a city.',
+    // Optional: add a hint for the agent
+    transformResponse: (res) => (res.ok ? { ...(res.json as object), unit: 'celsius' } : undefined),
+  }),
+  getWeather,
+);
 
 // Step 2: mount the endpoint (before your routers) and list the routers to scan
 mountMcp(app, { name: 'weather-api', routers: [router] });
@@ -392,7 +421,13 @@ const app = new Hono();
 
 app.post(
   '/notes',
-  mcpTool({ name: 'create_note', description: 'Save a note.', body: z.object({ text: z.string() }) }),
+  mcpTool({
+    name: 'create_note',
+    description: 'Save a note.',
+    body: z.object({ text: z.string() }),
+    // Optional: shape the response the agent sees
+    transformResponse: (res) => (res.ok ? { saved: true, id: (res.json as Note).id } : undefined),
+  }),
   bearerAuth({ token }),
   async (c) => c.json(await saveNote(await c.req.json()), 201),
 );
@@ -419,7 +454,16 @@ const OrdersController = () => import('#controllers/orders_controller');
 router
   .group(() => {
     // Step 1: mark routes. Group prefixes and middleware (auth, throttle) all apply.
-    router.get('orders/:id', [OrdersController, 'show']).mcp({ description: 'Get an order by id' });
+    router.get('orders/:id', [OrdersController, 'show']).mcp({
+      description: 'Get an order by id',
+      // Optional: add the customer from another route (same auth). Paths include the group prefix.
+      transformResponse: async (res, ctx) => {
+        if (!res.ok) return undefined;
+        const order = res.json as Order;
+        const customer = await ctx.callRoute({ path: '/api/v1/customers/:id', params: { id: order.customerId } });
+        return { ...order, customer: customer.json };
+      },
+    });
 
     // A VineJS 4 validator (AdonisJS 7) can be passed as the schema directly
     router
@@ -455,6 +499,8 @@ import { mountMcp } from 'mcp-expose/express';
 const spec = await fetch('https://api.example.com/openapi.json').then((r) => r.json());
 const tools = toolsFromOpenApi(spec, createFetchDispatcher({ baseUrl: 'https://api.example.com' }), {
   include: ({ method }) => method === 'get', // e.g. only read-only operations
+  // Optional: shape responses of the generated tools (ctx.tool is the tool name)
+  transformResponse: (res, ctx) => (ctx.tool === 'get_user' && res.ok ? redact(res.json) : undefined),
 });
 
 const app = express();
@@ -670,8 +716,9 @@ routes. The route stays a route tool; there is no need to rewrite it as a custom
 findOne(@Param('id') id: string) { ... }
 ```
 
-It works the same with every marker: `mcpTool({ transformResponse })`, `config: { mcp: { transformResponse } }`,
-`.mcp({ transformResponse })`, and `toolsFromOpenApi(doc, dispatch, { transformResponse })`.
+It works the same with every marker and every supported framework version: `@McpTool({ transformResponse })` (NestJS),
+`mcpTool({ transformResponse })` (Express, Koa, Hono; `mcpToolLegacy()` on Koa 1), `config: { mcp: { transformResponse } }`
+(Fastify), `.mcp({ transformResponse })` (AdonisJS) and `toolsFromOpenApi(doc, dispatch, { transformResponse })`.
 
 **What the hook receives**
 
@@ -681,7 +728,9 @@ It works the same with every marker: `mcpTool({ transformResponse })`, `config: 
 - `ctx.defaultResult()`: the result mcp-expose would return without the hook.
 - `ctx.callRoute({ method, path, params, query, body, headers })`: calls another route of the same app.
   - It forwards the same credentials (`Authorization`, cookies) and runs through the same middleware, guards and validation.
-  - `path` is the full path as your server sees it, including any global prefix or router mount path. Fill `:id` / `{id}`
+  - `path` is the full path as your server sees it, including every prefix: NestJS global prefix and URI version
+    (`/api/v1/...`), Express router mount path, Koa router `prefix`, Hono `app.route()` mount, AdonisJS group `.prefix()`.
+    `ctx.request.path` shows the full path of the tool's own route. Fill `:id` / `{id}`
     placeholders from `params`: values are URL-encoded, and `.` or `..` are rejected, so agent input can't redirect the call.
 
 **What it returns**

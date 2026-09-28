@@ -1,1 +1,4 @@
-{ "description": "NestJS 12 (ESM-only) + Express, \"type\": \"module\", global prefix /api + URI versioning /v1" }
+{
+  "description": "NestJS 12 (ESM-only) + Express, \"type\": \"module\", global prefix /api + URI versioning /v1",
+  "transformHook": true
+}

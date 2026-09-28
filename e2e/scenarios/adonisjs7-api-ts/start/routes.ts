@@ -3,9 +3,20 @@ import { mountMcp } from 'mcp-expose/adonisjs';
 import { middleware } from '#start/kernel';
 import { createOrderValidator } from '#validators/order';
 import { jwtVerifier, type VerifyTokenContext } from 'mcp-expose/oauth';
+import type { ResponseTransform } from 'mcp-expose';
 
 const ProductsController = () => import('#controllers/products_controller');
 const OrdersController = () => import('#controllers/orders_controller');
+
+// transformResponse: enrich the response with data from another route (same credentials, same middleware).
+const addProductCount: ResponseTransform = async (res, ctx) => {
+  const products = await ctx.callRoute({ path: '/api/v1/products', query: { q: 'key' } });
+  return {
+    ...(res.json as object),
+    hooked: true,
+    productCount: products.ok ? (products.json as { items: unknown[] }).items.length : null,
+  };
+};
 
 router
   .group(() => {
@@ -31,7 +42,7 @@ router
 
     router
       .get('whoami', ({ request }) => ({ tool: request.header('x-mcp-tool') ?? null }))
-      .mcp({ name: 'whoami', description: 'Debug' });
+      .mcp({ name: 'whoami', description: 'Debug', transformResponse: addProductCount });
   })
   .prefix('/api/v1');
 

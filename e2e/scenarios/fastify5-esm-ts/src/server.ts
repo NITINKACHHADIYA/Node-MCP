@@ -2,6 +2,7 @@ import rateLimit from '@fastify/rate-limit';
 import Fastify from 'fastify';
 import { fastifyMcp } from 'mcp-expose/fastify';
 import { jwtVerifier, type VerifyTokenContext } from 'mcp-expose/oauth';
+import type { ResponseTransform } from 'mcp-expose';
 
 // OAuth mode: e2e/run.mjs runs every scenario a second time with MCP_OAUTH_RESOURCE set.
 // `e2e-token` stays valid (the routes' own auth expects it); other tokens must be JWTs signed by the test issuer.
@@ -76,9 +77,23 @@ app.delete<{ Params: { id: string } }>(
   async (req) => ({ id: req.params.id, status: 'cancelled' }),
 );
 
-app.get('/whoami', { config: { mcp: { name: 'whoami', description: 'Debug' } } }, async (req) => ({
-  tool: req.headers['x-mcp-tool'] ?? null,
-}));
+// transformResponse: enrich the response with data from another route (same credentials, same middleware).
+const addProductCount: ResponseTransform = async (res, ctx) => {
+  const products = await ctx.callRoute({ path: '/products', query: { q: 'key' } });
+  return {
+    ...(res.json as object),
+    hooked: true,
+    productCount: products.ok ? (products.json as { items: unknown[] }).items.length : null,
+  };
+};
+
+app.get(
+  '/whoami',
+  { config: { mcp: { name: 'whoami', description: 'Debug', transformResponse: addProductCount } } },
+  async (req) => ({
+    tool: req.headers['x-mcp-tool'] ?? null,
+  }),
+);
 
 app.get('/admin/stats', async () => ({ orders: orders.size })); // not exposed
 

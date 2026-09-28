@@ -4,6 +4,7 @@ import { bearerAuth } from 'hono/bearer-auth';
 import { mcpTool, mountMcp } from 'mcp-expose/hono';
 import { z } from 'zod';
 import { jwtVerifier, type VerifyTokenContext } from 'mcp-expose/oauth';
+import type { ResponseTransform } from 'mcp-expose';
 
 const products = [{ id: '1', name: 'Keyboard', sku: 'KB-01' }];
 const orders = new Map<string, object>([['1', { id: '1', sku: 'KB-01', quantity: 1, status: 'paid' }]]);
@@ -37,7 +38,17 @@ api.post(
 api.delete('/orders/:id', mcpTool({ name: 'cancel_order', description: 'Cancel an order' }), auth, (c) =>
   c.json({ id: c.req.param('id'), status: 'cancelled' }),
 );
-api.get('/whoami', mcpTool({ name: 'whoami', description: 'Debug' }), (c) =>
+// transformResponse: enrich the response with data from another route (same credentials, same middleware).
+const addProductCount: ResponseTransform = async (res, ctx) => {
+  const products = await ctx.callRoute({ path: '/api/products', query: { q: 'key' } });
+  return {
+    ...(res.json as object),
+    hooked: true,
+    productCount: products.ok ? (products.json as { items: unknown[] }).items.length : null,
+  };
+};
+
+api.get('/whoami', mcpTool({ name: 'whoami', description: 'Debug', transformResponse: addProductCount }), (c) =>
   c.json({ tool: c.req.header('x-mcp-tool') ?? null }),
 );
 api.get('/admin/stats', auth, (c) => c.json({ orders: orders.size })); // not exposed

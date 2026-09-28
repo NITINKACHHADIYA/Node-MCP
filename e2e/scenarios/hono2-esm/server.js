@@ -50,7 +50,13 @@ app.post(
 app.delete('/orders/:id', mcpTool({ name: 'cancel_order', description: 'Cancel an order' }), auth, (c) =>
   c.json({ id: c.req.param('id'), status: 'cancelled' }),
 );
-app.get('/whoami', mcpTool({ name: 'whoami', description: 'Debug' }), (c) =>
+// transformResponse: enrich the response with data from another route (same credentials, same middleware).
+const addProductCount = async (res, ctx) => {
+  const products = await ctx.callRoute({ path: '/products', query: { q: 'key' } });
+  return { ...res.json, hooked: true, productCount: products.ok ? products.json.items.length : null };
+};
+
+app.get('/whoami', mcpTool({ name: 'whoami', description: 'Debug', transformResponse: addProductCount }), (c) =>
   c.json({ tool: c.req.header('x-mcp-tool') ?? null }),
 );
 app.get('/admin/stats', auth, (c) => c.json({ orders: orders.size })); // not exposed
