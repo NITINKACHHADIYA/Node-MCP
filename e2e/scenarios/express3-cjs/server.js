@@ -1,5 +1,6 @@
 // Express 3 (legacy): app-level routes and the bundled connect body parser.
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 const { mcpTool, mountMcp } = require('mcp-expose/express');
 const { jwtVerifier } = require('mcp-expose/oauth');
 
@@ -8,6 +9,9 @@ app.use(express.json());
 
 const products = [{ id: '1', name: 'Keyboard', sku: 'KB-01' }];
 const orders = { 1: { id: '1', sku: 'KB-01', quantity: 1, status: 'paid' } };
+
+// Rate-limit authenticated routes (also for agent traffic, which arrives through the same routes).
+const apiLimiter = rateLimit({ windowMs: 60000, max: 1000 });
 
 function auth(req, res, next) {
   if (req.headers.authorization !== 'Bearer e2e-token') return res.json(401, { error: 'Unauthorized' });
@@ -27,9 +31,15 @@ app.get(
   },
 );
 
-app.get('/orders/:id', mcpTool({ name: 'get_order', description: 'Get an order' }), auth, function (req, res) {
-  res.json(orders[req.params.id] || { error: 'not found' });
-});
+app.get(
+  '/orders/:id',
+  mcpTool({ name: 'get_order', description: 'Get an order' }),
+  apiLimiter,
+  auth,
+  function (req, res) {
+    res.json(orders[req.params.id] || { error: 'not found' });
+  },
+);
 
 app.post(
   '/orders',
@@ -42,6 +52,7 @@ app.post(
       required: ['sku', 'quantity'],
     },
   }),
+  apiLimiter,
   auth,
   function (req, res) {
     const body = req.body || {};
@@ -55,16 +66,22 @@ app.post(
   },
 );
 
-app.del('/orders/:id', mcpTool({ name: 'cancel_order', description: 'Cancel an order' }), auth, function (req, res) {
-  res.json({ id: req.params.id, status: 'cancelled' });
-});
+app.del(
+  '/orders/:id',
+  mcpTool({ name: 'cancel_order', description: 'Cancel an order' }),
+  apiLimiter,
+  auth,
+  function (req, res) {
+    res.json({ id: req.params.id, status: 'cancelled' });
+  },
+);
 
 app.get('/whoami', mcpTool({ name: 'whoami', description: 'Debug' }), function (req, res) {
   res.json({ tool: req.headers['x-mcp-tool'] || null });
 });
 
 // Not exposed.
-app.get('/admin/stats', auth, function (req, res) {
+app.get('/admin/stats', apiLimiter, auth, function (req, res) {
   res.json({ orders: Object.keys(orders).length });
 });
 
