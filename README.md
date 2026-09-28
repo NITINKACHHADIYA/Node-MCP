@@ -125,7 +125,9 @@ Tools are discovered **lazily on the first MCP request**, so the order you regis
 
 mcp-expose supports the **current major version of each framework and the two before it**. Every row
 below runs in CI as a real project (see [`e2e/`](e2e/README.md)): the packed library is installed from its
-tarball and the app is driven by the official MCP SDK client, on Node.js 20, 22 and 24.
+tarball and the app is driven by the official MCP SDK client, on Node.js 20, 22 and 24. Each row is checked for tool
+discovery, auth forwarding, the app's own validation errors, [OAuth](#oauth-sign-in-from-ai-clients) and
+[`transformResponse`](#shaping-and-enriching-responses), with and without the `oauth` option.
 
 | Framework | Supported majors | Notes                                                                                |
 | --------- | ---------------- | ------------------------------------------------------------------------------------ |
@@ -135,20 +137,6 @@ tarball and the app is driven by the official MCP SDK client, on Node.js 20, 22 
 | Koa       | **3**, 2, 1      | Koa 1 (generator middleware) uses `mcpToolLegacy()` / `koaMcpLegacy()`               |
 | Hono      | **4**, 3, 2      | Hono 2 and 3 are end-of-life upstream                                                |
 | AdonisJS  | **7**, 6         | AdonisJS 7 needs Node.js 24. AdonisJS 5 is not supported (see below)                 |
-
-**What each row verifies.** Every project is started twice: once plain, once with the [`oauth`](#oauth-sign-in-from-ai-clients)
-option and `jwtVerifier`. The same checks run on every framework version:
-
-| Feature                                                                                                  | NestJS 12 · 11 · 10 | Express 5 · 4 · 3 | Fastify 5 · 4 · 3 | Koa 3 · 2 · 1 | Hono 4 · 3 · 2 | AdonisJS 7 · 6 |
-| -------------------------------------------------------------------------------------------------------- | :-----------------: | :---------------: | :---------------: | :-----------: | :------------: | :------------: |
-| Tool discovery, input schemas, annotations                                                               |          ✓          |         ✓         |         ✓         |       ✓       |       ✓        |       ✓        |
-| Auth header forwarding, the app's own 401 / validation errors                                            |          ✓          |         ✓         |         ✓         |       ✓       |       ✓        |       ✓        |
-| [OAuth](#oauth-sign-in-from-ai-clients): metadata, 401/403 challenges, audience / issuer / expiry checks |          ✓          |         ✓         |         ✓         |       ✓       |       ✓        |       ✓        |
-| [`transformResponse`](#shaping-and-enriching-responses) with `callRoute()`                               |          ✓          |         ✓         |         ✓         |       ✓       |       ✓        |       ✓        |
-
-Rate limits applying to tool calls are checked with `express-rate-limit` (Express 4), `@fastify/rate-limit` (Fastify 5)
-and `@nestjs/throttler` (NestJS 11). The OpenAPI gateway (`toolsFromOpenApi`) passes the same checks. A separate project runs the full OAuth sign-in
-flow (dynamic client registration, authorization code + PKCE, scope step-up) with the official SDK client.
 
 **AdonisJS 5** (last release November 2022) is the only exception. It uses a different architecture:
 IoC-container imports such as `@ioc:Adonis/Core/Route`, and CommonJS builds. Supporting it would need a
@@ -684,41 +672,9 @@ routes. The route stays a route tool; there is no need to rewrite it as a custom
 findOne(@Param('id') id: string) { ... }
 ```
 
-**Where it goes in each framework** (all supported versions, see the [compatibility matrix](#version-compatibility)):
-
-```ts
-// NestJS: @McpTool option
-@McpTool({ name: 'get_order', transformResponse: enrichOrder })
-
-// Express, Koa, Hono: mcpTool() option (Koa 1: mcpToolLegacy())
-app.get('/orders/:id', mcpTool({ name: 'get_order', transformResponse: enrichOrder }), auth, getOrder);
-
-// Fastify: inside config.mcp
-app.get('/orders/:id', { config: { mcp: { name: 'get_order', transformResponse: enrichOrder } } }, getOrder);
-
-// AdonisJS: .mcp() option
-router.get('/orders/:id', [OrdersController, 'show']).use(middleware.auth()).mcp({ transformResponse: enrichOrder });
-
-// OpenAPI gateway: one hook for the generated tools; pick tools by ctx.tool
-toolsFromOpenApi(doc, dispatch, { transformResponse: (res, ctx) => (ctx.tool === 'get_order' ? enrichOrder(res, ctx) : undefined) });
-
-// Any adapter: server-level default for every route tool without its own hook
-mountMcp(app, { name: 'shop-api', transformResponse: stripInternalFields }); // or McpModule.forRoot({ ... })
-```
-
-**Paths for `ctx.callRoute()`** are the full paths your server sees, so include every prefix:
-
-| Framework | Include                                             | Example                 |
-| --------- | --------------------------------------------------- | ----------------------- |
-| NestJS    | global prefix and URI version                       | `/api/v1/customers/:id` |
-| Express   | router mount path (`app.use('/api', router)`)       | `/api/customers/:id`    |
-| Koa       | router prefix (`new Router({ prefix: '/v1' })`)     | `/v1/customers/:id`     |
-| Hono      | sub-app mount (`app.route('/api', api)`)            | `/api/customers/:id`    |
-| AdonisJS  | group prefix (`.prefix('/api/v1')`)                 | `/api/v1/customers/:id` |
-| Fastify   | plugin prefix, if routes are registered with one    | `/customers/:id`        |
-| OpenAPI   | the upstream API's path, as in the OpenAPI document | `/customers/{id}`       |
-
-Tip: `ctx.request.path` is the full path of the tool's own route, a handy reference for the prefix.
+It works the same with every marker and every supported framework version: `@McpTool({ transformResponse })` (NestJS),
+`mcpTool({ transformResponse })` (Express, Koa, Hono; `mcpToolLegacy()` on Koa 1), `config: { mcp: { transformResponse } }`
+(Fastify), `.mcp({ transformResponse })` (AdonisJS) and `toolsFromOpenApi(doc, dispatch, { transformResponse })`.
 
 **What the hook receives**
 
@@ -728,7 +684,9 @@ Tip: `ctx.request.path` is the full path of the tool's own route, a handy refere
 - `ctx.defaultResult()`: the result mcp-expose would return without the hook.
 - `ctx.callRoute({ method, path, params, query, body, headers })`: calls another route of the same app.
   - It forwards the same credentials (`Authorization`, cookies) and runs through the same middleware, guards and validation.
-  - `path` is the full path as your server sees it, including any global prefix or router mount path. Fill `:id` / `{id}`
+  - `path` is the full path as your server sees it, including every prefix: NestJS global prefix and URI version
+    (`/api/v1/...`), Express router mount path, Koa router `prefix`, Hono `app.route()` mount, AdonisJS group `.prefix()`.
+    `ctx.request.path` shows the full path of the tool's own route. Fill `:id` / `{id}`
     placeholders from `params`: values are URL-encoded, and `.` or `..` are rejected, so agent input can't redirect the call.
 
 **What it returns**
