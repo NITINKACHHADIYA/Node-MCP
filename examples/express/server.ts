@@ -3,6 +3,7 @@
  * MCP endpoint:           http://localhost:3000/mcp
  */
 import express, { type NextFunction, type Request, type Response } from 'express';
+import { rateLimit } from 'express-rate-limit';
 import { mcpTool, mountMcp } from 'mcp-expose/express';
 
 const app = express();
@@ -11,7 +12,9 @@ app.use(express.json());
 // (keeps per-IP rate limiting accurate).
 app.set('trust proxy', 'loopback');
 
-// Your existing auth middleware: unchanged.
+// Your existing rate limit and auth middleware: unchanged. Agent calls go through them too.
+const apiLimiter = rateLimit({ windowMs: 60_000, limit: 100, standardHeaders: true, legacyHeaders: false });
+
 function requireApiKey(req: Request, res: Response, next: NextFunction) {
   if (req.headers.authorization !== 'Bearer dev-token') return res.status(401).json({ error: 'Unauthorized' });
   next();
@@ -49,6 +52,7 @@ app.post(
       required: ['productId', 'quantity'],
     },
   }),
+  apiLimiter,
   requireApiKey,
   (req, res) => {
     const { productId, quantity } = req.body;
@@ -58,7 +62,7 @@ app.post(
 );
 
 // Not marked -> never visible to agents.
-app.delete('/admin/cache', requireApiKey, (_req, res) => res.sendStatus(204));
+app.delete('/admin/cache', apiLimiter, requireApiKey, (_req, res) => res.sendStatus(204));
 
 mountMcp(app, {
   name: 'shop-api',

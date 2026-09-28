@@ -14,6 +14,9 @@ const products = [
 ];
 const orders = new Map([['1', { id: '1', sku: 'KB-01', quantity: 1, status: 'paid' }]]);
 
+// Rate-limit authenticated routes (also for agent traffic, which arrives through the same routes).
+const apiLimiter = rateLimit({ windowMs: 60_000, limit: 1000, standardHeaders: true, legacyHeaders: false });
+
 const auth = (req, res, next) =>
   req.headers.authorization === 'Bearer e2e-token' ? next() : res.status(401).json({ error: 'Unauthorized' });
 const searchLimiter = rateLimit({ windowMs: 60_000, limit: 5, standardHeaders: true, legacyHeaders: false });
@@ -34,7 +37,7 @@ api.get(
   },
 );
 
-api.get('/orders/:id', mcpTool({ name: 'get_order', description: 'Get an order' }), auth, (req, res) => {
+api.get('/orders/:id', mcpTool({ name: 'get_order', description: 'Get an order' }), apiLimiter, auth, (req, res) => {
   const order = orders.get(req.params.id);
   if (!order) return res.status(404).json({ error: 'Not found' });
   res.json(order);
@@ -51,6 +54,7 @@ api.post(
       required: ['sku', 'quantity'],
     },
   }),
+  apiLimiter,
   auth,
   (req, res) => {
     const { sku, quantity } = req.body;
@@ -63,15 +67,21 @@ api.post(
   },
 );
 
-api.delete('/orders/:id', mcpTool({ name: 'cancel_order', description: 'Cancel an order' }), auth, (req, res) => {
-  res.json({ id: req.params.id, status: 'cancelled' });
-});
+api.delete(
+  '/orders/:id',
+  mcpTool({ name: 'cancel_order', description: 'Cancel an order' }),
+  apiLimiter,
+  auth,
+  (req, res) => {
+    res.json({ id: req.params.id, status: 'cancelled' });
+  },
+);
 
 api.get('/whoami', mcpTool({ name: 'whoami', description: 'Debug' }), (req, res) => {
   res.json({ tool: req.headers['x-mcp-tool'] || null, ip: req.ip });
 });
 
-api.get('/admin/stats', auth, (req, res) => res.json({ orders: orders.size })); // not exposed
+api.get('/admin/stats', apiLimiter, auth, (req, res) => res.json({ orders: orders.size })); // not exposed
 
 // OAuth mode: e2e/run.mjs runs every scenario a second time with MCP_OAUTH_RESOURCE set.
 // `e2e-token` stays valid (the routes' own auth expects it); other tokens must be JWTs signed by the test issuer.
