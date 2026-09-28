@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- `transformResponse` hook for route tools, on every marker and adapter, plus a server-level default. It shapes what
+  the agent sees from a route's response (hide or format fields, add hints) without turning the route into a custom
+  tool. The hook receives the status, headers, body and parsed JSON, the tool arguments and the MCP call context.
+  `ctx.callRoute()` enriches the response with other routes of the app, using the same credentials and the same
+  middleware, guards and validation. Placeholders are URL-encoded, and `.` / `..` segments are rejected.
+- `ResponseTransform`, `ResponseTransformContext` and `RouteToolResponse` types.
+
 ## [1.1.0] - 2026-09-27
 
 ### Added

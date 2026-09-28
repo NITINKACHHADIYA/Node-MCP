@@ -1,3 +1,4 @@
 {
-  "description": "NestJS 10 + Express platform, classic `nest new` tsconfig (CommonJS, node10 resolution), class-validator DTOs"
+  "description": "NestJS 10 + Express platform, classic `nest new` tsconfig (CommonJS, node10 resolution), class-validator DTOs",
+  "transformHook": true
 }

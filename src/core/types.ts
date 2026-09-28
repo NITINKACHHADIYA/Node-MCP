@@ -96,7 +96,58 @@ export interface RouteToolOptions {
   headers?: Record<string, string>;
   /** OAuth scopes needed to call this tool (when the `oauth` option is enabled). */
   scopes?: string[];
+  /**
+   * Shape what the agent sees from the route's response: trim or rename fields,
+   * add hints, or enrich it with data from other routes (`ctx.callRoute`).
+   * Overrides the server-level `transformResponse`.
+   */
+  transformResponse?: ResponseTransform;
 }
+
+/** A route's HTTP response as seen by `transformResponse`. */
+export interface RouteToolResponse extends RouteResponse {
+  /** The parsed body when the response is JSON, otherwise `undefined`. */
+  json?: unknown;
+  /** `true` for 2xx/3xx responses. */
+  ok: boolean;
+}
+
+export interface ResponseTransformContext {
+  /** Name of the tool being called. */
+  tool: string;
+  /** The arguments the agent passed (after validation). */
+  args: Record<string, unknown>;
+  /** The internal request that produced the response. */
+  request: RouteRequest;
+  /** The MCP call context: headers, client IP and, with OAuth, the verified token (`auth`). */
+  toolContext: ToolContext;
+  /** The result mcp-expose would return without the hook. */
+  defaultResult(): ToolResult;
+  /**
+   * Call another route of the same app, with the same forwarded credentials
+   * (auth header, cookies) and through the same middleware, guards and validation.
+   */
+  callRoute(request: {
+    method?: string;
+    /** Path of the route, e.g. `/customers/:id`. Placeholders are filled from `params`. */
+    path: string;
+    /** Values for `:param` / `{param}` placeholders; URL-encoded, and `.` / `..` are rejected. */
+    params?: Record<string, unknown>;
+    query?: Record<string, string | string[]>;
+    body?: unknown;
+    headers?: Record<string, string>;
+  }): Promise<RouteToolResponse>;
+}
+
+/**
+ * Turns a route's response into the tool result. Return:
+ *  - a string or any JSON value: sent to the agent (as `structuredContent` for objects).
+ *    It is an error result when the route answered with an HTTP error status;
+ *  - a full `ToolResult`: used as is (set `isError` yourself);
+ *  - `undefined`: keep the default result.
+ * Throwing turns the call into an error result with the message.
+ */
+export type ResponseTransform = (response: RouteToolResponse, ctx: ResponseTransformContext) => unknown;
 
 /** HTTP route that backs a tool. `path` may use `:param` or `{param}` placeholders. */
 export interface RouteSpec {
@@ -150,6 +201,11 @@ export interface McpServerOptions {
   forwardHeaders?: string[];
   /** Max characters of an API response returned to the model. @default 100_000 */
   maxResponseChars?: number;
+  /**
+   * Default `transformResponse` for every route tool of this server that does not
+   * set its own (e.g. to strip internal fields everywhere).
+   */
+  transformResponse?: ResponseTransform;
   /**
    * Protect the MCP endpoint with OAuth 2.1, as the MCP authorization spec
    * describes. MCP clients (Claude, Cursor, VS Code, ...) then discover your

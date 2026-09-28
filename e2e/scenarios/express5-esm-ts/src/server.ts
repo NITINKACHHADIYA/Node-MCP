@@ -1,5 +1,6 @@
 import express, { type NextFunction, type Request, type Response } from 'express';
 import { rateLimit } from 'express-rate-limit';
+import type { ResponseTransform } from 'mcp-expose';
 import { mcpTool, mountMcp } from 'mcp-expose/express';
 import { z } from 'zod';
 import { jwtVerifier, type VerifyTokenContext } from 'mcp-expose/oauth';
@@ -64,9 +65,19 @@ shop.delete(
   },
 );
 
-shop.get('/whoami', mcpTool({ name: 'whoami', description: 'Debug' }), (req, res) => {
-  res.json({ tool: req.headers['x-mcp-tool'] ?? null });
-});
+// transformResponse: enrich the response with data from another route (same credentials, same middleware).
+const addProductCount: ResponseTransform = async (res, ctx) => {
+  const products = await ctx.callRoute({ path: '/shop/products', query: { q: 'key' } });
+  return { ...(res.json as object), hooked: true, productCount: (products.json as { items: unknown[] }).items.length };
+};
+
+shop.get(
+  '/whoami',
+  mcpTool({ name: 'whoami', description: 'Debug', transformResponse: addProductCount }),
+  (req, res) => {
+    res.json({ tool: req.headers['x-mcp-tool'] ?? null });
+  },
+);
 
 shop.get('/internal/metrics', (_req, res) => res.json({ ok: true })); // not exposed
 
