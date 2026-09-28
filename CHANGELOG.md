@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-09-28
+
 ### Added
 
 - `transformResponse` hook for route tools, on every marker and adapter, plus a server-level default. It shapes what
@@ -14,6 +16,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `ctx.callRoute()` enriches the response with other routes of the app, using the same credentials and the same
   middleware, guards and validation. Placeholders are URL-encoded, and `.` / `..` segments are rejected.
 - `ResponseTransform`, `ResponseTransformContext` and `RouteToolResponse` types.
+
+### Fixed
+
+- A tool handler or hook that returns plain data with its own `content` array (for example a CMS post) is no longer
+  mistaken for an MCP `ToolResult`; only `content` arrays of MCP content items (`{ type: ... }`) are.
 
 ## [1.1.0] - 2026-09-27
 
@@ -61,6 +68,7 @@ options, default tool naming) now follows Semantic Versioning.
 - Path parameters that are empty, `.` or `..` are rejected, so an agent cannot use them to reach routes
   that were never exposed as tools (for example `/orders/../admin`).
 
-[Unreleased]: https://github.com/NITINKACHHADIYA/Node-MCP/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/NITINKACHHADIYA/Node-MCP/compare/v1.1.1...HEAD
+[1.1.1]: https://github.com/NITINKACHHADIYA/Node-MCP/releases/tag/v1.1.1
 [1.1.0]: https://github.com/NITINKACHHADIYA/Node-MCP/releases/tag/v1.1.0
 [1.0.0]: https://github.com/NITINKACHHADIYA/Node-MCP/releases/tag/v1.0.0
