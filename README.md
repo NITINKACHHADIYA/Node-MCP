@@ -199,7 +199,16 @@ export class CreateOrderDto {
 @UseGuards(JwtAuthGuard)                 // ← still enforced for every tool call
 export class OrdersController {
   @Get(':id')
-  @McpTool({ description: 'Get one order by its id.' })
+  @McpTool({
+    description: 'Get one order by its id.',
+    // Optional: shape what the agent sees. Hide internal fields, add the customer from another route.
+    transformResponse: async (res, ctx) => {
+      if (!res.ok) return undefined; // keep the default error result
+      const { internalNotes, ...order } = res.json as Order;
+      const customer = await ctx.callRoute({ path: '/api/customers/:id', params: { id: order.customerId } });
+      return { ...order, customer: customer.json };
+    },
+  })
   findOne(@Param('id', ParseIntPipe) id: number) { … }
 
   @Post()
@@ -273,6 +282,9 @@ app.get(
     name: 'search_products',
     description: 'Search the product catalog by name.',
     query: { type: 'object', properties: { q: { type: 'string' } } },
+    // Optional: only send the fields the agent needs
+    transformResponse: (res) =>
+      res.ok ? (res.json as { items: Product[] }).items.map(({ id, name, price }) => ({ id, name, price })) : undefined,
   }),
   searchProducts,
 );
@@ -337,7 +349,14 @@ app.post(
         required: ['title'],
       },
     },
-    config: { mcp: { name: 'add_todo', description: 'Add a todo item.' } }, // or `mcp: true`
+    config: {
+      mcp: {
+        name: 'add_todo',
+        description: 'Add a todo item.',
+        // Optional: shape the response the agent sees
+        transformResponse: (res) => (res.ok ? { created: true, id: (res.json as Todo).id } : undefined),
+      },
+    }, // or `mcp: true`
   },
   addTodo,
 );
@@ -359,7 +378,15 @@ const app = new Koa();
 const router = new Router({ prefix: '/api' });
 
 // Step 1: mark routes
-router.get('/weather/:city', mcpTool({ description: 'Current weather for a city.' }), getWeather);
+router.get(
+  '/weather/:city',
+  mcpTool({
+    description: 'Current weather for a city.',
+    // Optional: add a hint for the agent
+    transformResponse: (res) => (res.ok ? { ...(res.json as object), unit: 'celsius' } : undefined),
+  }),
+  getWeather,
+);
 
 // Step 2: mount the endpoint (before your routers) and list the routers to scan
 mountMcp(app, { name: 'weather-api', routers: [router] });
@@ -394,7 +421,13 @@ const app = new Hono();
 
 app.post(
   '/notes',
-  mcpTool({ name: 'create_note', description: 'Save a note.', body: z.object({ text: z.string() }) }),
+  mcpTool({
+    name: 'create_note',
+    description: 'Save a note.',
+    body: z.object({ text: z.string() }),
+    // Optional: shape the response the agent sees
+    transformResponse: (res) => (res.ok ? { saved: true, id: (res.json as Note).id } : undefined),
+  }),
   bearerAuth({ token }),
   async (c) => c.json(await saveNote(await c.req.json()), 201),
 );
@@ -421,7 +454,16 @@ const OrdersController = () => import('#controllers/orders_controller');
 router
   .group(() => {
     // Step 1: mark routes. Group prefixes and middleware (auth, throttle) all apply.
-    router.get('orders/:id', [OrdersController, 'show']).mcp({ description: 'Get an order by id' });
+    router.get('orders/:id', [OrdersController, 'show']).mcp({
+      description: 'Get an order by id',
+      // Optional: add the customer from another route (same auth). Paths include the group prefix.
+      transformResponse: async (res, ctx) => {
+        if (!res.ok) return undefined;
+        const order = res.json as Order;
+        const customer = await ctx.callRoute({ path: '/api/v1/customers/:id', params: { id: order.customerId } });
+        return { ...order, customer: customer.json };
+      },
+    });
 
     // A VineJS 4 validator (AdonisJS 7) can be passed as the schema directly
     router
@@ -457,6 +499,8 @@ import { mountMcp } from 'mcp-expose/express';
 const spec = await fetch('https://api.example.com/openapi.json').then((r) => r.json());
 const tools = toolsFromOpenApi(spec, createFetchDispatcher({ baseUrl: 'https://api.example.com' }), {
   include: ({ method }) => method === 'get', // e.g. only read-only operations
+  // Optional: shape responses of the generated tools (ctx.tool is the tool name)
+  transformResponse: (res, ctx) => (ctx.tool === 'get_user' && res.ok ? redact(res.json) : undefined),
 });
 
 const app = express();

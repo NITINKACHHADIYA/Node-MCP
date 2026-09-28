@@ -10,9 +10,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Documentation
 
-- README: the version compatibility section says what each framework version is verified for (including OAuth and
-  `transformResponse`), the `transformResponse` section names the marker for every framework, and `ctx.callRoute()`
-  documents each framework's path prefixes.
+- README: every framework guide example (NestJS, Express, Fastify, Koa, Hono, AdonisJS, OpenAPI gateway) now shows
+  `transformResponse`; the version compatibility section says what each framework version is verified for (including
+  OAuth and `transformResponse`), the `transformResponse` section names the marker for every framework, and
+  `ctx.callRoute()` documents each framework's path prefixes.
 
 ### Tests
 
