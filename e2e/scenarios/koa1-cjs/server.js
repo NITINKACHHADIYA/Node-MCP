@@ -72,9 +72,19 @@ router.del('/orders/:id', mcpToolLegacy({ name: 'cancel_order', description: 'Ca
   this.body = { id: this.params.id, status: 'cancelled' };
 });
 
-router.get('/whoami', mcpToolLegacy({ name: 'whoami', description: 'Debug' }), function* () {
-  this.body = { tool: this.get('x-mcp-tool') || null };
-});
+// transformResponse: enrich the response with data from another route (same credentials, same middleware).
+const addProductCount = async (res, ctx) => {
+  const products = await ctx.callRoute({ path: '/v1/products', query: { q: 'key' } });
+  return { ...res.json, hooked: true, productCount: products.ok ? products.json.items.length : null };
+};
+
+router.get(
+  '/whoami',
+  mcpToolLegacy({ name: 'whoami', description: 'Debug', transformResponse: addProductCount }),
+  function* () {
+    this.body = { tool: this.get('x-mcp-tool') || null };
+  },
+);
 
 // Not exposed.
 router.get('/admin/stats', auth, function* () {

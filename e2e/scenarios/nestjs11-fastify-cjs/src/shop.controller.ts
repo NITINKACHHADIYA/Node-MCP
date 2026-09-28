@@ -51,7 +51,16 @@ export class OrdersController {
 @Controller('debug')
 export class DebugController {
   @Get('whoami')
-  @McpTool({ name: 'whoami', description: 'Debug' })
+  @McpTool({
+    name: 'whoami',
+    description: 'Debug',
+    // Enrich the response with data from another route (same credentials, same guards and pipes).
+    transformResponse: async (res, ctx) => {
+      const products = await ctx.callRoute({ path: '/products', query: { q: 'key' } });
+      const count = products.ok ? (products.json as { items: unknown[] }).items.length : null;
+      return { ...(res.json as object), hooked: true, productCount: count };
+    },
+  })
   whoami(@Headers('x-mcp-tool') tool?: string) {
     return { tool: tool ?? null };
   }

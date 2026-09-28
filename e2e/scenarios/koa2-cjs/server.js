@@ -66,7 +66,13 @@ router.delete('/orders/:id', mcpTool({ name: 'cancel_order', description: 'Cance
   ctx.body = { id: ctx.params.id, status: 'cancelled' };
 });
 
-router.get('/whoami', mcpTool({ name: 'whoami', description: 'Debug' }), (ctx) => {
+// transformResponse: enrich the response with data from another route (same credentials, same middleware).
+const addProductCount = async (res, ctx) => {
+  const products = await ctx.callRoute({ path: '/v1/products', query: { q: 'key' } });
+  return { ...res.json, hooked: true, productCount: products.ok ? products.json.items.length : null };
+};
+
+router.get('/whoami', mcpTool({ name: 'whoami', description: 'Debug', transformResponse: addProductCount }), (ctx) => {
   ctx.body = { tool: ctx.get('x-mcp-tool') || null };
 });
 

@@ -79,9 +79,19 @@ async function main() {
     async (req) => ({ id: req.params.id, status: 'cancelled' }),
   );
 
-  app.get('/whoami', { config: { mcp: { name: 'whoami', description: 'Debug' } } }, async (req) => ({
-    tool: req.headers['x-mcp-tool'] || null,
-  }));
+  // transformResponse: enrich the response with data from another route (same credentials, same middleware).
+  const addProductCount = async (res, ctx) => {
+    const products = await ctx.callRoute({ path: '/products', query: { q: 'key' } });
+    return { ...res.json, hooked: true, productCount: products.ok ? products.json.items.length : null };
+  };
+
+  app.get(
+    '/whoami',
+    { config: { mcp: { name: 'whoami', description: 'Debug', transformResponse: addProductCount } } },
+    async (req) => ({
+      tool: req.headers['x-mcp-tool'] || null,
+    }),
+  );
 
   app.get('/admin/stats', { preHandler: auth }, async () => ({ orders: orders.size })); // not exposed
 

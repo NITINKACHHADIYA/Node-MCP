@@ -77,9 +77,19 @@ api.delete(
   },
 );
 
-api.get('/whoami', mcpTool({ name: 'whoami', description: 'Debug' }), (req, res) => {
-  res.json({ tool: req.headers['x-mcp-tool'] || null, ip: req.ip });
-});
+// transformResponse: enrich the response with data from another route (same credentials, same middleware).
+const addProductCount = async (res, ctx) => {
+  const products = await ctx.callRoute({ path: '/api/products', query: { q: 'key' } });
+  return { ...res.json, hooked: true, productCount: products.ok ? products.json.items.length : null };
+};
+
+api.get(
+  '/whoami',
+  mcpTool({ name: 'whoami', description: 'Debug', transformResponse: addProductCount }),
+  (req, res) => {
+    res.json({ tool: req.headers['x-mcp-tool'] || null, ip: req.ip });
+  },
+);
 
 api.get('/admin/stats', apiLimiter, auth, (req, res) => res.json({ orders: orders.size })); // not exposed
 

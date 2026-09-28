@@ -39,6 +39,8 @@ Run a subset with `npm run test:e2e -- nestjs koa`. Set `E2E_KEEP=1` to keep the
 
 To add a scenario, create a folder with a `package.json` that has a `start` script (and optionally `build`),
 serve the shop API described at the top of `contract.mjs` on `process.env.PORT`, and optionally add an
-`e2e.json` file (`description`, `mcpPath`, `rateLimit`, `minNode`, `contract`). With `"contract": "oauth"` the
+`e2e.json` file (`description`, `mcpPath`, `rateLimit`, `minNode`, `transformHook`, `contract`). With
+`"transformHook": true` the `whoami` tool must use a `transformResponse` hook that adds `hooked: true` and a
+`productCount` fetched with `ctx.callRoute()` from the scenario's product search route. With `"contract": "oauth"` the
 scenario runs `oauth-contract.mjs` instead: the SDK client signs in through the app's own OAuth flow and the scenario is not run a second time. Scenarios whose `minNode` is higher than the
 current Node.js are skipped, and CI runs the suite on Node.js 20, 22 and 24.

@@ -10,7 +10,16 @@ await startUpstream(port + 1000);
 
 // Load the upstream's OpenAPI document over HTTP, like a real gateway would.
 const spec = await fetch(`${upstreamUrl}/openapi.json`).then((r) => r.json());
-const tools = toolsFromOpenApi(spec, createFetchDispatcher({ baseUrl: upstreamUrl }));
+// transformResponse: enrich the response with data from another route (same credentials, same middleware).
+const addProductCount = async (res, ctx) => {
+  const products = await ctx.callRoute({ path: '/products', query: { q: 'key' } });
+  return { ...res.json, hooked: true, productCount: products.ok ? products.json.items.length : null };
+};
+
+const tools = toolsFromOpenApi(spec, createFetchDispatcher({ baseUrl: upstreamUrl }), {
+  // Only whoami is enriched; returning undefined keeps the default result for the other tools.
+  transformResponse: (res, ctx) => (ctx.tool === 'whoami' ? addProductCount(res, ctx) : undefined),
+});
 
 // OAuth mode: e2e/run.mjs runs every scenario a second time with MCP_OAUTH_RESOURCE set.
 // `e2e-token` stays valid (the routes' own auth expects it); other tokens must be JWTs signed by the test issuer.

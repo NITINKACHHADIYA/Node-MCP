@@ -1,4 +1,5 @@
 {
   "description": "Koa 3 + @koa/router 15 + @koa/bodyparser, ESM, MCP endpoint on a custom path",
-  "mcpPath": "/agents/mcp"
+  "mcpPath": "/agents/mcp",
+  "transformHook": true
 }
