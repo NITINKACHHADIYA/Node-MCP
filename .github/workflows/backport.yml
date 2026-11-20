@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: korthout/backport-action@v4
+      - uses: korthout/backport-action@v5
         with:
           label_pattern: ^backport (v\d+\.x)$
           pull_title: '[${target_branch}] ${pull_title}'
